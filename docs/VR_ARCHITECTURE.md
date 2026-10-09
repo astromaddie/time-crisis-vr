@@ -52,16 +52,18 @@ The tested APK was built from clean runtime source `3e6077444f9a293a2fa76263dbc9
 | Separate-eye colour probe | left red/right blue, inspected 2160-square captures |
 | Separate-eye game rendering | opening cutscene and matched quiet train/crate eye pairs inspected; wearer reached the opening train |
 | Train crate explosions | corrected authored-depth placement accepted by the wearer on `3e60774`; matched active-flame A/B images unavailable; screen flash remains an overlay |
-| Yaw90/yaw180 and multiview comparison | queued; separate eye passes remain default |
-| HUD and audio | HUD inspected in matched eye pairs; 48 kHz output initialized, audible quality pending |
+| Yaw90/yaw180 and multiview comparison | matched 2160-square yaw90 pair inspected; yaw180 and multiview queued; separate eye passes remain default |
+| HUD and audio | HUD inspected in matched eye pairs; 48 kHz output initialized; wearer confirms audio works as expected |
 | Controller profile and gun fit | Valve Frame profile observed; wearer accepted saved `gun_pitch=-15` after reporting the barrel too high; fresh default stays 0° |
 | Timing and settings retention | saved angle reload verified; 120 Hz runtime cadence observed at 2160-square eyes, sustained 120 FPS unproven |
-| Physical controls, ducking, recenter and comfort | production-path tests pass; full 15-minute worn checklist remains pending |
+| Physical controls, ducking, recenter and comfort | wearer confirms grip cover/reload and Menu pause/resume; both hands, physical ducking, View gestures and full comfort checklist remain pending |
 | Shutdown | diagnostic self-exit SIGSEGV after XR cleanup lacks a usable stack; container stop/exit 137 does not establish graceful native shutdown |
 
 The latest candidate wearer run used normal input with image capture, pose logging, replay, synthetic controls, forced rendering and diagnostic self-exit disabled. Its 68 focused 240-frame reports at 120 Hz/2160-square eyes contain 16,320 frames. Window means were 4.88–7.25 ms (mean 6.898 ms), largest sample 88.16 ms and 3,520 reported budget misses. These CPU-observed render-wall counters are not GPU timings or compositor dropped frames and do not establish sustained 120 FPS. The wearer described smoothness as good. Earlier focus/dashboard transitions also selected 72 Hz and temporarily 60 Hz. Image readback and debugging runs are excluded from clean performance analysis.
 
 Matched quiet-scene captures at arcade frame 7455 compare prior `a880bdc` and candidate `3e60774` using the same calibrated input. Both eyes retain the HUD and shot mark on the crate, 1,299 triangles, 11 layer-0 sprites and inactive fade. Fewer than 0.01% of colour channels differ; visually comparable, not byte-identical. These pairs contain no active world-effect sprites and validate the preserved path. The wearer then accepted the explosion correction subjectively. The earlier frame-8750 capture instead shows an authored yellow screen flash, confirmed by the mixer snapshot, and is not flame-depth evidence. An earlier uncalibrated crate-shot probe hit below the crate and is excluded.
+
+The off-head yaw90 pair also completed at frame 7455, with the same scene counts and both eyes inspected. It shows side-facing train geometry with a black region outside the visible scene; it does not establish worn comfort. Yaw180 and multiview remain queued after a safe shared-device handoff.
 
 The README and supplied wear checklist cover Stage 1, both weapon hands, cover/reload, aim, ducking, pause, View holds, angle changes, audio and comfort. Short wearer sessions do not complete that checklist. After the wearer confirmed they finished and quit, the lingering not-visible Time Crisis container was scoped-stopped, diagnostics removed and new progress/options/EEPROM/recordings preserved.
 

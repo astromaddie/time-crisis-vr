@@ -51,8 +51,11 @@ Report: build ID from build-info.json, scene, aim alignment, world scale,
 HUD legibility, cover behavior, controls, comfort, audio and any crash.
 Wearer-assisted validation has confirmed the Valve Frame profile, 2160×2160 per eye,
 120 Hz, settings reload and subjectively good smoothness. The wearer accepted the
-world-effect depth correction on build 3e60774. Full controls, yaw/multiview and audio
-still need validation; matched quiet-scene stereo captures are inspected.
+world-effect depth correction on build 3e60774. The wearer also confirmed audio,
+grip cover/reload and Menu pause/resume.
+A matched synthetic yaw90 pair is inspected. Both hands, physical ducking,
+View gestures, yaw180 and multiview still need validation. Matched quiet-scene
+stereo captures are inspected.
 See evidence/ for the recorded build/package/device verification results.
 
 DISPLAY AND CURRENT ACCEPTANCE
@@ -67,8 +70,10 @@ fresh-install default. An early right-eye train capture shows TIME EXTENDED/WAIT
 later matched 2160-square quiet-scene pairs verify the HUD and calibrated shot marks.
 On build 3e60774, the wearer reported that the explosions now look great. World
 billboards use the game-authored depth estimate, while screen flashes remain overlays.
-Matched active-flame images, yaw/multiview, full controls and audio assessment remain
-pending.
+Audio, grip cover/reload and Menu pause/resume were also confirmed by the wearer.
+The matched yaw90 pair is inspected; yaw180 and multiview remain queued.
+Matched active-flame images, both weapon hands, physical ducking,
+View gestures and full comfort assessment remain pending.
 
 Sustained 120 FPS is not established. The latest 3e60774 wear run produced 68 focused
 240-frame reports at 120 Hz/2160-square eyes, with no image or pose capture. Window
