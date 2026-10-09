@@ -2,7 +2,7 @@
 from pathlib import Path
 import argparse, hashlib, json, os, shutil, subprocess, sys, tempfile, zipfile
 import xml.etree.ElementTree as ET
-import bootstrap, patch_upstream, translate_crate
+import bootstrap, patch_sdl_frame, patch_upstream, translate_crate
 ROOT=Path(__file__).resolve().parents[1]
 FRAME_BUILD=os.environ.get('TCVR_STEAM_FRAME_BUILD')=='1'
 UPSTREAM=Path(os.environ.get('TCVR_UPSTREAM_SOURCE',ROOT/'upstream'))
@@ -93,6 +93,14 @@ def package_manifest(bundle_roms):
     tree.write(output,encoding='utf-8',xml_declaration=True)
     return output
 
+def sdl_java_source_root(sdl_source, generated_view=None):
+    """Keep SDL source pristine for Quest; isolate Frame's Lepton Java guard."""
+    java_root=Path(sdl_source)/'android-project/app/src/main/java'
+    if not FRAME_BUILD:return java_root,None
+    generated_view=generated_view or BUILD/'generated-sdl-java'
+    metadata=patch_sdl_frame.prepare_frame_java_view(java_root,generated_view)
+    return Path(generated_view),metadata
+
 def package(assets):
     models=assets/'models';models.mkdir(exist_ok=True)
     model=ROOT/'quest/assets/models/player-gun.tcgun'
@@ -108,7 +116,8 @@ def package(assets):
         d8=bt/'lib/d8.jar';strip=ROOT/'.tools/ndk/android-ndk-r27c/toolchains/llvm/prebuilt/windows-x86_64/bin/llvm-strip.exe'
         sdl_source=ROOT/'.tools/sdl/SDL2-2.30.11';openxr=ROOT/'.tools/openxr'
     classes=BUILD/'classes';classes.mkdir(exist_ok=True)
-    sources=list((sdl_source/'android-project/app/src/main/java').rglob('*.java'))+list((ROOT/'quest/java').rglob('*.java'))
+    sdl_java_root,frame_sdl_metadata=sdl_java_source_root(sdl_source)
+    sources=list(sdl_java_root.rglob('*.java'))+list((ROOT/'quest/java').rglob('*.java'))
     argfile=BUILD/'javac.args'
     argfile.write_text('\n'.join('"'+str(p).replace('\\','/')+'"' for p in sources))
     javac=JAVA/('javac' if FRAME_BUILD else 'javac.exe');jar_tool=JAVA/('jar' if FRAME_BUILD else 'jar.exe');java=JAVA/('java' if FRAME_BUILD else 'java.exe')
@@ -186,6 +195,11 @@ def package(assets):
                 'openxr_android_loader':{'version':'1.1.43','url':bootstrap_frame.XR_URL,'sha256':bootstrap_frame.XR_SHA256,
                                          'archive_sha256':hashlib.sha256(xr_archive.read_bytes()).hexdigest(),
                                          'arm64_library_sha256':hashlib.sha256(loader.read_bytes()).hexdigest()},
+            },
+            'sdl_frame_java':{
+                **frame_sdl_metadata,
+                'generated_source_view':str(sdl_java_root.relative_to(ROOT)),
+                'patch_script_sha256':hashlib.sha256((ROOT/'tools/patch_sdl_frame.py').read_bytes()).hexdigest(),
             },
             'native_build':'arm64-v8a, separate-eye default, absolute 2160-pixel eye cap',
             'signing':'persistent local development key; excluded from APK',

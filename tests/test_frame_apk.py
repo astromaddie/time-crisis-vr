@@ -5,8 +5,11 @@ import hashlib
 import json
 import subprocess
 import zipfile
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT/'tools'))
+import patch_sdl_frame
 SDK = Path('/Users/mads/Library/Android/sdk')
 BUILD_TOOLS = SDK / 'build-tools/35.0.0'
 
@@ -28,6 +31,16 @@ assert receipt['build_tools']['jdk']['javac'].startswith('javac 17.')
 assert receipt['build_tools']['python']['version']
 assert receipt['build_tools']['cmake']['version'].startswith('cmake version ')
 assert receipt['build_tools']['ninja']['version']
+frame_java = receipt['sdl_frame_java']
+assert frame_java['patch_id'] == patch_sdl_frame.PATCH_ID
+assert frame_java['patch_script_sha256'] == hashlib.sha256((ROOT/'tools/patch_sdl_frame.py').read_bytes()).hexdigest()
+java_view = ROOT/frame_java['generated_source_view']
+patched_handler = java_view/patch_sdl_frame.HANDLER_PATH
+source_handler = ROOT/'.tools/sdl/SDL2-2.30.11/android-project/app/src/main/java'/patch_sdl_frame.HANDLER_PATH
+assert frame_java['source_sha256'] == hashlib.sha256(source_handler.read_bytes()).hexdigest()
+assert frame_java['patched_sha256'] == hashlib.sha256(patched_handler.read_bytes()).hexdigest()
+assert frame_java['generated_java_tree_sha256'] == patch_sdl_frame.java_tree_sha256(java_view)
+assert patch_sdl_frame.PATCH_MARKER not in source_handler.read_text()
 deps = receipt['dependencies']
 assert deps['sdl']['version'] == '2.30.11' and deps['sdl']['archive_sha256'] == deps['sdl']['sha256']
 assert deps['openxr_android_loader']['version'] == '1.1.43'
