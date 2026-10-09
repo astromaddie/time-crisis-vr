@@ -68,7 +68,12 @@ for forbidden in ('com.oculus', 'quest2', 'quest3', 'android.hardware.vr.headtra
 assert 'android.hardware.touchscreen' in manifest
 assert 'hardware.vr.headtracking' not in manifest
 
-subprocess.run(['/opt/homebrew/opt/openjdk@17/bin/java', '-jar', BUILD_TOOLS/'lib/apksigner.jar',
-                'verify', '--verbose', apk], check=True, stdout=subprocess.DEVNULL)
+signer = ['/opt/homebrew/opt/openjdk@17/bin/java', '-jar', BUILD_TOOLS/'lib/apksigner.jar']
+subprocess.run(signer + ['verify', '--verbose', apk], check=True, stdout=subprocess.DEVNULL)
+# With minSdk 29 the default verifier selects v3; its v2=false means unused,
+# not absent. Verify the v2 signature over the API24-27 range explicitly.
+v2_report = subprocess.check_output(signer + ['verify', '--verbose', '--min-sdk-version', '24',
+                                              '--max-sdk-version', '27', apk], text=True)
+assert 'Verified using v2 scheme (APK Signature Scheme v2): true' in v2_report, v2_report
 subprocess.run([BUILD_TOOLS/'zipalign', '-c', '-P', '16', '4', apk], check=True)
 print('PASS: signed/aligned Frame package, generic OpenXR manifest, ARM64-only libraries, ROM/key exclusion and complete dependency/toolchain receipt')
