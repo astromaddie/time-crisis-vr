@@ -5,3 +5,10 @@ __pycache__/
 *.log
 *.keystore
 quest/assets/roms/
+
+# Local supplied game data, Android artifacts and signing material.
+timecris.zip
+*.apk
+*.idsig
+*.jks
+**/extracted/

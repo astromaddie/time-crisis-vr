@@ -3,11 +3,22 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
+#include <string.h>
 int tc_game_main(int,char**);
 int SDL_main(int argc,char **argv) {
     (void)argc;(void)argv;
+#ifdef TCVR_STEAM_FRAME
+    const char *dir="/sdcard/Documents/TimeCrisisVR";
+    if(access(dir,R_OK|W_OK)||chdir(dir)){
+        __android_log_print(ANDROID_LOG_ERROR,"TCVR","Cannot use persistent Frame storage at %s: %s",dir,strerror(errno));
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,"Time Crisis VR","Cannot read/write /sdcard/Documents/TimeCrisisVR. Check storage access and retry.",NULL);
+        return 2;
+    }
+#else
     const char *dir=SDL_AndroidGetInternalStoragePath();
     if(!dir||chdir(dir))return 2;
+#endif
     remove("timecris-vr-previous.log");rename("timecris-vr.log","timecris-vr-previous.log");
     remove("previous-session.inputs");rename("last-session.inputs","previous-session.inputs");
     freopen("timecris-vr.log","w",stderr);setvbuf(stderr,NULL,_IOLBF,0);

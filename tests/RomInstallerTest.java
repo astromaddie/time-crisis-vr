@@ -1,4 +1,5 @@
 import org.timecrisis.quest.RomInstaller;
+import org.timecrisis.frame.FrameStorage;
 import java.io.*;
 import java.nio.file.*;
 import java.security.*;
@@ -29,12 +30,29 @@ public final class RomInstallerTest {
             zip(archive,"chip.1",new byte[]{0});
             try{RomInstaller.importZip(archive,dir,expected);throw new AssertionError("Wrong ROM accepted");}catch(IOException correct){}
             try{RomInstaller.manifest(new ByteArrayInputStream((sha(data)+"  ../bad\n").getBytes("UTF-8")));throw new AssertionError("Bad manifest accepted");}catch(IOException correct){}
+            File persistent=temp.resolve("Documents/TimeCrisisVR").toFile();FrameStorage.ensureWritable(persistent);
+            check(FrameStorage.ROOT.getPath().equals("/sdcard/Documents/TimeCrisisVR"),"Frame production root is persistent across app resets");
+            check(FrameStorage.archive(persistent).getPath().endsWith("Documents/TimeCrisisVR/timecris.zip"),"Frame archive uses the persistent root");
+            check(FrameStorage.models(persistent).getPath().endsWith("Documents/TimeCrisisVR/models"),"Frame models use the persistent root");
+            File sentinel=new File(persistent,".write-test");Files.write(sentinel.toPath(),new byte[]{4,2});FrameStorage.ensureWritable(persistent);
+            check(Arrays.equals(Files.readAllBytes(sentinel.toPath()),new byte[]{4,2}),"Storage probe preserves a pre-existing sentinel");
+            zip(FrameStorage.archive(persistent),"ts2ver-b.1",data);
+            File frameRoms=FrameStorage.prepareRoms(persistent,expected);
+            check(frameRoms.getName().equals("roms")&&RomInstaller.ready(frameRoms,expected),"Frame importer writes renamed chips to persistent storage");
+            File blocker=temp.resolve("not-a-directory").toFile();Files.write(blocker.toPath(),new byte[]{1});
+            try{FrameStorage.ensureWritable(new File(blocker,"TimeCrisisVR"));throw new AssertionError("Unwritable persistent root accepted");}
+            catch(IOException correct){check(correct.getMessage().contains("Cannot create persistent storage directory"),"Storage failure explains the directory problem");}
+            File missing=temp.resolve("missing-archive").toFile();FrameStorage.ensureWritable(missing);
+            try{FrameStorage.prepareRoms(missing,expected);throw new AssertionError("Missing Frame archive was accepted");}
+            catch(IOException correct){check(correct.getMessage().contains("timecris.zip"),"Missing archive error names the expected path");}
             if(args.length==2){
                 Map<String,String> real=RomInstaller.manifest(new FileInputStream(args[1]));
-                File game=temp.resolve("game-roms").toFile();RomInstaller.importZip(new File(args[0]),game,real);
-                check(real.size()==31&&RomInstaller.ready(game,real),"All real game ROMs verified");
+                File game=temp.resolve("actual-game/Documents/TimeCrisisVR").toFile();FrameStorage.ensureWritable(game);
+                Files.copy(new File(args[0]).toPath(),FrameStorage.archive(game).toPath());
+                File gameRoms=FrameStorage.prepareRoms(game,real);
+                check(real.size()==31&&RomInstaller.ready(gameRoms,real),"All real game ROMs verified under persistent Frame storage");
             }
-            System.out.println("PASS: first-run, renamed chips, corruption, repair, invalid ZIP contents, traversal, manifest validation and real ROM import.");
+            System.out.println("PASS: first-run, renamed chips, corruption, repair, invalid ZIP contents, traversal, manifest validation and persistent Frame ROM import.");
         }finally{
             try(java.util.stream.Stream<Path> paths=Files.walk(temp)){paths.sorted(Comparator.reverseOrder()).forEach(p->{try{Files.delete(p);}catch(IOException e){throw new UncheckedIOException(e);}});}
         }

@@ -1,0 +1,42 @@
+# Steam Frame VR port status
+
+This branch adds a ROM-free, ARM64 Steam Frame build of the existing Quest OpenXR/GLES3 port. The Frame code is opt-in with `TCVR_STEAM_FRAME`; the default CMake and manifest paths remain the Quest build. The package id is `org.timecrisis.frame`. Its immersive activity uses Khronos OpenXR launch metadata and includes the Android OpenXR loader. It does not declare Meta device features.
+
+The game renderer, camera projection, aim calculation, sRGB negotiation, model, and approximately 59.906 Hz arcade simulation remain on their established paths. Frame defaults to separate eye passes. `frame-display.cfg` may set `multiview=1` to compare the optional OpenXR multiview path and `eye_resolution=512..2160` to set the target maximum dimension per eye. The recommended aspect ratio is preserved while scaling up or down to that target, then clamped to the runtime's per-eye maximum; the recommendation, maximum, target, and actual size are logged. Frame does not request a display refresh rate; the XR loop follows `predictedDisplayPeriod`. Quest keeps its existing refresh negotiation.
+
+The Steam launcher's first-run activity imports `timecris.zip` directly from `/sdcard/Documents/TimeCrisisVR`. It verifies the ROM chips by SHA-256 and accepts renamed chip entries. Storage access is tested by creating and deleting a unique probe in that root; Android storage settings are offered only after a real read/write failure. The extracted chips live in `roms/`; the checked-in gun model is copied to `models/`. The native process changes its working directory to this same persistent root before opening the game. Settings, logs, diagnostic requests, captures, and game replay files therefore remain outside the app cache and survive Lepton resets.
+
+Frame controls use fixed physical sides even when the saved default weapon hand changes. Either trigger selects that hand and fires; either squeeze/value holds the virtual pedal. Releasing both grips hides behind cover and reloads. Right A adds credits, right B toggles the laser, and right Menu pauses or resumes. Left View returns from options on a short press, recenters after 1 second, and recenters plus recalibrates upright height after 3 seconds. A hold does not also trigger the short action. In options, right X switches between grip and physical ducking, the right thumbstick adjusts gun angle from -60 to +60 degrees, its click changes the default hand, and left-stick click resets the angle.
+
+The Valve Frame controller profile is suggested only when `XR_VALVE_frame_controller_interaction` is available; OpenXR Touch is the fallback. Touch controllers do not expose the Frame left View or right X controls through this profile. On that fallback, left X recenters immediately, left Y changes cover mode in options, and left Menu pauses; the 1-second and 3-second View gestures are unavailable. Right A/B retain their fixed credit/laser roles.
+
+For unattended Frame diagnostics, place a one-shot `vrdiag.once` text file in the persistent root before launch. It is parsed once and renamed to `vrdiag.last`. Boolean keys accept `0` or `1`: `force_render`, `synthetic`, `synthetic_hands`, `autostart`, `colorprobe`, `dump_eyes`, `dump_hud`, and `timing`. Numeric keys are `diag_yaw` and `diag_hand_yaw` in degrees, `probe_seconds` (clamped to 60), `dump_tick` (simulation ticks, clamped to 1,000,000), and `self_exit_seconds` (clamped to 120). `dump_tick=0` captures on the first rendered frame; a positive value delays eye and HUD dumps until `ss22_input_update` has advanced that many simulation ticks. This permits separate-eye and multiview captures at the same game state. `colorprobe=1` defaults to a 3-second probe; the left and right eyes render red and blue. With `force_render=1`, the one-shot path renders and advances the game while the headset is unfocused or the runtime says not to render, and records timing instead of resetting it. `autostart=1` holds the synthetic pedal to leave cover, emits three credit pulses, waits 36 simulation ticks, then fires for 12 ticks. Set `synthetic_hands=1` to render a visible gun hand and `diag_yaw` to set the diagnostic head yaw. Synthetic eye IPD rotates with that yaw; its view origin stays upright and does not cancel the requested yaw. `dump_eyes=1` writes `vr-dumps/vr-eye0.ppm` and `vr-dumps/vr-eye1.ppm`; `dump_hud=1` writes `vr-dumps/vr-hud.ppm`. The production `capture.request` marker instead captures to `eye-0.ppm` and `eye-1.ppm` on the next rendered frame. Frame timing summaries appear in `timecris-vr.log`. No diagnostic records image or audio continuously.
+
+## Build and acceptance
+
+Build on the configured macOS host with:
+
+```sh
+sh Build-Steam-Frame.sh --rom /path/to/timecris.zip --jobs 4
+```
+
+The script verifies the pinned SDL and OpenXR archives, copies the exact upstream submodule commit to an ignored disposable tree before applying source patches and generated game code, and keeps the signing key outside the repository and build cache. It writes `artifacts/TimeCrisisVR-SteamFrame-arm64.apk` and a matching `TimeCrisisVR-SteamFrame-build-info.json`. The APK contains no ROM archive, extracted ROM chips, generated game source, or signing key.
+
+Source, native build, Java packaging, APK signature/alignment, manifest, ABI, and portable production-path tests can be verified on the host. They do not prove Steam launch, controller firmware bindings, storage permissions, rendered headset output, color response, or comfort. Those require the Frame acceptance run. Start with the persistent-root importer and one-shot diagnostic above, then check focus loss/re-entry, both triggers and grips, fixed-side buttons, short/held View behavior, the options labels, eye/HUD dumps, and the default separate-eye renderer while worn.
+
+## Delivery and current acceptance
+
+The ROM-free installation bundle contains `install.sh`, `install.py`, `README.txt`, `payload/TimeCrisisVR.apk`, build metadata, evidence, and `SHA256SUMS`. Its installer verifies every delivered file and all 31 supplied chip hashes, takes a byte-for-byte and permission-preserving backup of existing title/data files, claims the shared Frame booking, and registers the persistent Steam title `TimeCrisisVR`. Launch through Steam for controller input. The checked-in installer templates are under `tools/steam_frame/bundle`; they run from the assembled delivery bundle.
+
+Host regressions cover production Quest/Frame/Touch input, View timing and focus rearm, timing/projection/aim math, options persistence, color negotiation, ROM import and persistent-storage failures, patch reproducibility, HUD capture orientation, full native build modes, and installer integrity/backup behavior. The canonical upstream checkout must remain clean before the macOS build generates its disposable source view. Windows/ANGLE render tests were unavailable on the macOS host; device rendering and worn acceptance remain separate checks.
+
+| Feature | Current device status |
+|---|---|
+| Loader/session and persistent ROM import | not started |
+| Separate-eye rendering and color probe | not started |
+| Multiview comparison | not started |
+| HUD and audio output | not started |
+| Repeated timing measurements and Steam data retention | not started |
+| Physical controls, aim, ducking, recenter and comfort | not started |
+
+The supplied bundle README includes the 15-minute Stage 1 wear checklist. Controls, comfort, audio perception and visuals require that wear session before acceptance. No 120 Hz recommendation is made without a measured compositor period and repeated device results.

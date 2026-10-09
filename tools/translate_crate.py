@@ -8,8 +8,10 @@ The code rejoins upstream at its valid 0x4AB98 instruction boundary; upstream's
 """
 from pathlib import Path
 import hashlib
+import os
 
 ROOT = Path(__file__).resolve().parents[1]
+UPSTREAM = Path(os.environ.get('TCVR_UPSTREAM_SOURCE', ROOT/'upstream'))
 START, END = 0x4A4A2, 0x4AB98
 SHA256 = '58f24c5576f64cfa60f3a3d131fedf61b99e9bd5e7a873c343559b3d8e58fa68'
 
@@ -95,7 +97,7 @@ def main():
     # Construct the program from the same verified byte lanes used by tc_game.c.
     rom = bytearray(0x400000)
     for lane in range(4):
-        rom[lane::4] = (ROOT/f'upstream/timecris/extracted/ts2verb.{4-lane}').read_bytes()
+        rom[lane::4] = (UPSTREAM/f'timecris/extracted/ts2verb.{4-lane}').read_bytes()
     source = translate(rom)
     target = ROOT/'build/tc_crate.c'
     target.parent.mkdir(exist_ok=True)

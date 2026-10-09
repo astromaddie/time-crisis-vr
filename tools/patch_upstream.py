@@ -1,6 +1,7 @@
 """Small, repeatable Quest hooks; keep the shared engine and generated game intact."""
 from pathlib import Path
-ROOT = Path(__file__).resolve().parents[1] / 'upstream'
+import os
+ROOT = Path(os.environ.get('TCVR_UPSTREAM_SOURCE', Path(__file__).resolve().parents[1] / 'upstream'))
 
 def edit(name, changes, marker='TCVR_PATCH'):
     path = ROOT / name

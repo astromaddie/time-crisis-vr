@@ -27,7 +27,10 @@ static void text(int x,int y,const char *s,uint8_t r,uint8_t g,uint8_t b){
         }
     }
 }
-static void panel(bool laser,bool physical_crouch,bool left_handed,int gun_pitch,bool saved){
+static void panel(bool laser,bool physical_crouch,bool left_handed,bool frame_profile_active,int gun_pitch,bool saved){
+#ifndef TCVR_STEAM_FRAME
+    (void)frame_profile_active;
+#endif
     for(int y=0;y<HEIGHT;y++)for(int x=0;x<WIDTH;x++){
         uint8_t *p=pixels+(y*WIDTH+x)*4;bool border=x<2||x>=WIDTH-2||y<2||y>=HEIGHT-2;
         p[0]=border?54:12;p[1]=border?183:19;p[2]=border?207:29;p[3]=border?255:240;
@@ -41,19 +44,46 @@ static void panel(bool laser,bool physical_crouch,bool left_handed,int gun_pitch
     text(24,164,"RIGHT STICK UP / DOWN: ADJUST",181,207,220);
     text(24,188,"LEFT STICK CLICK: RESET TO 0",181,207,220);
     text(24,224,"LASER:",255,255,255);text(160,224,laser?"ON":"OFF",laser?94:228,laser?226:235,laser?151:239);
+#ifdef TCVR_STEAM_FRAME
+    text(336,224,"RIGHT B: ON / OFF",181,207,220);
+#else
     text(336,224,left_handed?"Y: ON / OFF":"B: ON / OFF",181,207,220);
+#endif
     text(24,262,physical_crouch?"COVER: PHYSICAL DUCKING":"COVER: GRIP BUTTONS",255,255,255);
+#ifdef TCVR_STEAM_FRAME
+    text(24,286,frame_profile_active?"RIGHT X: CHANGE COVER MODE":"LEFT Y: CHANGE COVER MODE",181,207,220);
+#else
     text(24,286,left_handed?"B RIGHT: CHANGE MODE":"Y LEFT: CHANGE MODE",181,207,220);
+#endif
     text(24,320,physical_crouch?"UPRIGHT: OUT / DUCK: COVER":"HOLD EITHER GRIP: LEAVE COVER",255,255,255);
     if(physical_crouch){
+#ifdef TCVR_STEAM_FRAME
+        text(24,344,frame_profile_active?"LEFT VIEW HOLD 3s: RECENTER + HEIGHT":"HEIGHT CALIBRATION UNAVAILABLE",181,207,220);
+#else
         text(24,344,left_handed?"A RIGHT: RESET UPRIGHT HEIGHT":"X LEFT: RESET UPRIGHT HEIGHT",181,207,220);
+#endif
+#ifdef TCVR_STEAM_FRAME
+        text(24,368,frame_profile_active?"LEFT VIEW HOLD 1s: RECENTER":"LEFT X: RECENTER",181,207,220);
+        if(frame_profile_active)text(24,392,"STAND OR SIT UPRIGHT FIRST",181,207,220);
+#else
         text(24,368,"STAND OR SIT UPRIGHT FIRST",181,207,220);
+#endif
     }else{
         text(24,344,"RELEASE BOTH: COVER / RELOAD",181,207,220);
+#ifdef TCVR_STEAM_FRAME
+        text(24,368,frame_profile_active?"LEFT VIEW HOLD 1s: RECENTER":"LEFT X: RECENTER",181,207,220);
+        if(frame_profile_active)text(24,392,"LEFT VIEW SHORT: BACK",181,207,220);
+#else
         text(24,368,left_handed?"A RIGHT: RECENTER":"X LEFT: RECENTER",181,207,220);
+#endif
     }
+#ifdef TCVR_STEAM_FRAME
+    text(24,414,"RIGHT A: ADD CREDITS",181,207,220);
+    text(24,438,saved?(frame_profile_active?"RIGHT MENU: RESUME":"LEFT MENU: RESUME"):"SAVING FAILED",saved?170:255,saved?193:150,saved?206:150);
+#else
     text(24,404,left_handed?"X LEFT: ADD CREDITS":"A RIGHT: ADD CREDITS",181,207,220);
     text(24,438,saved?"LEFT MENU: RESUME":"SAVING FAILED",saved?170:255,saved?193:150,saved?206:150);
+#endif
 }
 static GLuint shader(GLenum type,const char *source){
     GLuint s=glCreateShader(type);qgpu_shader_source(s,source);glCompileShader(s);GLint ok;glGetShaderiv(s,GL_COMPILE_STATUS,&ok);
@@ -69,12 +99,12 @@ bool qui_init(void){
     glGenVertexArrays(1,&vao);glGenBuffers(1,&vbo);glGenTextures(1,&texture);last_state=-1;
     return true;
 }
-void qui_draw(const float view[16],const float projection[16],V3 head,Q4 rotation,bool laser,bool physical_crouch,bool left_handed,int gun_pitch,bool saved){
+void qui_draw(const float view[16],const float projection[16],V3 head,Q4 rotation,bool laser,bool physical_crouch,bool left_handed,bool frame_profile_active,int gun_pitch,bool saved){
     if(!program)return;
     GLint bound,unit;glGetIntegerv(GL_ACTIVE_TEXTURE,&unit);glActiveTexture(GL_TEXTURE0);glGetIntegerv(GL_TEXTURE_BINDING_2D,&bound);glBindTexture(GL_TEXTURE_2D,texture);
-    int state=(physical_crouch?1:0)|(laser?2:0)|(saved?4:0)|(left_handed?8:0);
+    int state=(physical_crouch?1:0)|(laser?2:0)|(saved?4:0)|(left_handed?8:0)|(frame_profile_active?16:0);
     if(last_state!=state||last_pitch!=gun_pitch){
-        panel(laser,physical_crouch,left_handed,gun_pitch,saved);last_pitch=gun_pitch;
+        panel(laser,physical_crouch,left_handed,frame_profile_active,gun_pitch,saved);last_pitch=gun_pitch;
         GLint row_length;glGetIntegerv(GL_UNPACK_ROW_LENGTH,&row_length);glPixelStorei(GL_UNPACK_ROW_LENGTH,0);
         glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,WIDTH,HEIGHT,0,GL_RGBA,GL_UNSIGNED_BYTE,pixels);glPixelStorei(GL_UNPACK_ROW_LENGTH,row_length);
         glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
@@ -89,5 +119,11 @@ void qui_draw(const float view[16],const float projection[16],V3 head,Q4 rotatio
     glBindVertexArray(vao);glBindBuffer(GL_ARRAY_BUFFER,vbo);glBufferData(GL_ARRAY_BUFFER,sizeof vertices,vertices,GL_STREAM_DRAW);
     glEnableVertexAttribArray(0);glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,5*sizeof(float),0);glEnableVertexAttribArray(1);glVertexAttribPointer(1,2,GL_FLOAT,GL_FALSE,5*sizeof(float),(void*)(3*sizeof(float)));
     glDrawArrays(GL_TRIANGLES,0,6);glDisable(GL_BLEND);glBindTexture(GL_TEXTURE_2D,bound);glActiveTexture(unit);
+}
+bool qui_capture_ppm(const char *path){
+    FILE *f=fopen(path,"wb");if(!f)return false;
+    bool ok=fprintf(f,"P6\n%d %d\n255\n",WIDTH,HEIGHT)>0;
+    for(int y=0;ok&&y<HEIGHT;y++)for(int x=0;x<WIDTH;x++)if(fwrite(pixels+(y*WIDTH+x)*4,1,3,f)!=3){ok=false;break;}
+    if(fclose(f))ok=false;return ok;
 }
 void qui_shutdown(void){glDeleteProgram(program);glDeleteVertexArrays(1,&vao);glDeleteBuffers(1,&vbo);glDeleteTextures(1,&texture);program=vao=vbo=texture=0;last_state=-1;}
