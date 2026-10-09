@@ -26,7 +26,7 @@ file(GLOB LIFTED "${UP}/timecris/gen/tc_lifted_*.c")
 set_source_files_properties(${LIFTED} "${UP}/timecris/gen/tc_snd_driver.c" PROPERTIES COMPILE_OPTIONS "-O2;-w")
 set_source_files_properties("${UP}/timecris/src/tc_game.c" PROPERTIES COMPILE_DEFINITIONS "main=tc_game_main;SDL_MAIN_HANDLED")
 add_library(main SHARED
-  quest_main.c quest_host.c quest_gl.c quest_scene.c quest_gun.c quest_options.c quest_cover.c quest_ui.c
+  quest_main.c quest_host.c frame_replay.c quest_gl.c quest_scene.c quest_gun.c quest_options.c quest_cover.c quest_ui.c
   "${UP}/timecris/src/tc_game.c" ${LIFTED}
   "${ROOT}/build/tc_crate.c"
   "${UP}/timecris/gen/tc_c25.c" "${UP}/timecris/gen/tc_snd_driver.c"

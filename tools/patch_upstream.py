@@ -200,5 +200,11 @@ static size_t spr_cache_bytes;'''),
          '    glEnd();\n#ifdef TCVR\n    }\n#endif\n    glDisable(GL_BLEND);\n    glEnable(GL_ALPHA_TEST);\n    glDisable(GL_TEXTURE_2D);\n}'),
     ], marker='TCVR_IMPACT_PROJECTION')
 
+    edit('engine/ss22_run.c', [
+        ('#include "ss22_host.h"', '#include "ss22_host.h"\n#ifdef TCVR_STEAM_FRAME\n#include "frame_replay.h"\n#endif'),
+        ('            rep_read();\n        }\n        return;\n    }\n    if (start_name', '            rep_read();\n        }\n#ifdef TCVR_STEAM_FRAME\n        extern void ss22_frame_replay_tick(uint32_t rr_frame);\n        ss22_frame_replay_tick(rr_frame);\n#endif\n        return;\n    }\n    if (start_name'),
+        ('    if (win_scale) ss22_eeprom_persist(nvfile);         /* a player\'s session keeps its options and records; headless runs (the gates) never do */', '#ifdef TCVR_STEAM_FRAME\n    if (win_scale && tcvr_frame_replay_eeprom_persist_allowed(rep_path != NULL)) ss22_eeprom_persist(nvfile);\n#else\n    if (win_scale) ss22_eeprom_persist(nvfile);         /* a player\'s session keeps its options and records; headless runs (the gates) never do */\n#endif'),
+    ], marker='TCVR_FRAME_REPLAY_SAFE')
+
 if __name__ == '__main__':
     main()

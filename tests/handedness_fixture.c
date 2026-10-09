@@ -134,6 +134,20 @@ void eng_audio_set_volume(int v){(void)v;}
 void ss22_snd_inputs(uint16_t bits,unsigned w,unsigned p1,unsigned p2){(void)w;(void)p1;(void)p2;arcade_bits=bits;}
 V3 qgun_muzzle(V3 p,Q4 q){return add(p,rotate(q,v3(0,0,-.1f)));}
 bool qvr_aim(V3 p,V3 d,float *x,float *y,V3 *hit){*x=p.x+.5f;*y=.5f;*hit=add(p,mul(d,2.f));return true;}
+#ifdef TCVR_STEAM_FRAME
+static unsigned sprite_report_arm_calls;
+static bool sprite_report_last_arm;
+static unsigned sprite_report_emit_calls,sprite_report_emit_scene_frame,fake_scene_frame;
+static uint64_t sprite_report_emit_tick;
+static bool sprite_report_emit_ready;
+void qvr_sprite_report_arm(bool enabled){sprite_report_arm_calls++;sprite_report_last_arm=enabled;}
+unsigned qvr_scene_frame_number(void){return fake_scene_frame;}
+bool qvr_sprite_report_emit(FILE *out,uint64_t tick,bool ready){
+    (void)out;assert(frame_capture_request.saved_eyes==3u);
+    sprite_report_emit_calls++;sprite_report_emit_scene_frame=qvr_scene_frame_number();
+    sprite_report_emit_tick=tick;sprite_report_emit_ready=ready;return ready;
+}
+#endif
 static void tick_at(XrTime time){sync_input(time,true,1.7f);ss22_input_update();}
 static void tick(void){tick_at(100);}
 static void click(XrAction a,int h){buttons[id(a)][h]=true;tick();buttons[id(a)][h]=false;tick();}
@@ -273,16 +287,108 @@ static void frame_grip_anchor_regressions(void){
     pose_locate_result[0][LEFT_HAND]=pose_locate_result[1][LEFT_HAND]=pose_locate_result[0][RIGHT_HAND]=pose_locate_result[1][RIGHT_HAND]=XR_SUCCESS;
     puts("PASS: Frame grip anchor A/B uses valid grip position for both hands, preserves aim rotation and moves muzzle/ray together, falls back on locate error and skips synthetic hands");
 }
+static void frame_capture_request_regressions(void){
+    unlink("capture.request");
+    frame_diag.sprite_report=false;frame_diag.dump_tick=10;frame_diag.input_ticks=1;
+    assert(!frame_capture_pair_begin());assert(!frame_capture_request_latched());
+    assert(!frame_diag_sprite_capture_ready()); /* Default/no request waits for the configured tick. */
+
+    /* A marker created between the two eye checks belongs to the next pair. */
+    frame_capture_pair_complete(0,true);
+    FILE *marker=fopen("capture.request","w");assert(marker);fputs("capture\n",marker);fclose(marker);
+    frame_capture_pair_complete(1,true);
+    assert(access("capture.request",F_OK)==0&&!frame_capture_request_latched());
+    assert(!frame_diag_sprite_capture_ready()); /* Request alone does not arm sprite reporting. */
+
+    assert(frame_capture_pair_begin()&&frame_capture_request_latched());
+    assert(!frame_diag_sprite_capture_ready());
+    assert(!frame_capture_pair_complete(0,false));
+    assert(access("capture.request",F_OK)==0); /* Request alone does not arm sprite reporting. */
+    frame_diag.sprite_report=true;frame_diag.dump_eyes=true;
+    assert(frame_capture_pair_begin()&&frame_diag_sprite_capture_ready()&&frame_capture_request.dump_eyes); /* Late marker releases report and paired eye dumps. */
+    assert(!frame_capture_pair_complete(0,true));
+    assert(access("capture.request",F_OK)==0&&frame_diag.dump_eyes);
+    assert(!frame_capture_pair_complete(1,false));
+    assert(access("capture.request",F_OK)==0&&frame_diag.dump_eyes); /* Failed eye keeps request and dump armed. */
+
+    assert(frame_capture_pair_begin()&&frame_diag_sprite_capture_ready()&&frame_capture_request.dump_eyes);
+    assert(!frame_capture_pair_complete(0,true));
+    assert(access("capture.request",F_OK)==0&&frame_diag.dump_eyes); /* Eye 0 alone never consumes it. */
+    assert(frame_capture_pair_complete(1,true));
+    assert(access("capture.request",F_OK)!=0&&!frame_capture_request_latched()&&!frame_diag.dump_eyes);
+    assert(!frame_diag_sprite_capture_ready());
+
+    frame_diag.sprite_report=false;
+    assert(!frame_capture_pair_begin()&&!frame_diag_sprite_capture_ready());
+    unlink("capture.request");
+    puts("PASS: Frame capture request latches across eyes, late sprite report trigger, failed-pair retry and complete-pair consumption");
+}
+static void frame_sprite_pair_report_regressions(void){
+    unlink("capture.request");
+    frame_diag.sprite_report=true;frame_diag.dump_eyes=true;frame_diag.dump_tick=10;frame_diag.input_ticks=3;
+    sprite_report_emit_calls=0;fake_scene_frame=100;
+    FILE *marker=fopen("capture.request","w");assert(marker);fputs("capture\n",marker);fclose(marker);
+    assert(frame_capture_pair_begin()&&frame_diag_sprite_capture_ready());
+    assert(!frame_capture_pair_complete(0,true)&&sprite_report_emit_calls==0);
+    fake_scene_frame=101;
+    assert(!frame_capture_pair_complete(1,false)&&sprite_report_emit_calls==0); /* Failed eye cannot publish a report. */
+
+    assert(frame_capture_pair_begin()&&frame_diag_sprite_capture_ready());
+    fake_scene_frame=200;assert(!frame_capture_pair_complete(0,true)&&sprite_report_emit_calls==0);
+    fake_scene_frame=201;assert(frame_capture_pair_complete(1,true));
+    assert(sprite_report_emit_calls==1&&sprite_report_emit_scene_frame==201&&sprite_report_emit_tick==3&&sprite_report_emit_ready);
+    assert(access("capture.request",F_OK)!=0&&!frame_diag.dump_eyes); /* Late request captures and reports the same completed pair. */
+
+    frame_diag.dump_eyes=true;frame_diag.input_ticks=10;frame_diag.dump_tick=10;fake_scene_frame=300;
+    assert(!frame_capture_pair_begin()&&frame_diag_dump_ready());
+    assert(!frame_capture_pair_complete(0,true)&&sprite_report_emit_calls==1);
+    fake_scene_frame=301;assert(frame_capture_pair_complete(1,true));
+    assert(sprite_report_emit_calls==2&&sprite_report_emit_scene_frame==301&&sprite_report_emit_tick==10);
+
+    frame_diag.sprite_report=false;frame_diag.dump_eyes=false;frame_diag.dump_tick=0;
+    frame_capture_pair_begin();frame_capture_pair_complete(0,true);fake_scene_frame=401;
+    frame_capture_pair_complete(1,true);assert(sprite_report_emit_calls==2);
+    unlink("capture.request");
+    puts("PASS: sprite report follows both successful eye writes, uses eye-1 scene/tick identity, retries failed pairs, and stays opt-in");
+}
+static void frame_replay_tick_regressions(void){
+    unlink("vrdiag.once");remove("vrdiag.last");
+    frame_diag=(FrameDiagnostic){0};frame_diag.dump_tick=20;frame_diag.input_ticks=0;
+    assert(setenv("TCVR_FRAME_REPLAY","1",1)==0);frame_diag_load();
+    assert(frame_diag.replay&&!frame_diag_dump_ready());
+    ss22_frame_replay_tick(19);assert(frame_diag.input_ticks==19&&!frame_diag_dump_ready());
+    ss22_frame_replay_tick(20);assert(frame_diag.input_ticks==20&&frame_diag_dump_ready());
+    frame_diag.replay=false;frame_diag.input_ticks=7;ss22_frame_replay_tick(99);assert(frame_diag.input_ticks==7);
+    frame_diag.replay=true;arcade_bits=0x30;trigger=pedal=1;
+    ss22_input_neutral();assert(arcade_bits==0x30&&trigger==0&&pedal==0);
+    frame_diag.replay=false;ss22_input_neutral();assert(arcade_bits==0);
+    assert(unsetenv("TCVR_FRAME_REPLAY")==0);
+    puts("PASS: replay diagnostics track the actual rr_frame for dump readiness and leave normal input-update ticks untouched and preserve replay cabinet state through live-input neutralization");
+}
 static void frame_diagnostic_regressions(void){
     coin_frames=0;frame_diag.auto_fire_ticks=frame_diag.auto_fire_delay_ticks=0;
     frame_diag.autostart_started=false;frame_diag.input_ticks=0;
-    assert(!frame_diag.grip_anchor); /* Omitted one-shot keys retain the production-safe default. */
+    frame_diag.sprite_report=false;frame_diag.dump_eyes=false;frame_diag.colorprobe=false;frame_diag.dump_tick=0;
+    sprite_report_arm_calls=0;sprite_report_last_arm=false;
+    assert(!frame_diag.grip_anchor&&!frame_diag.sprite_report&&!frame_diag.dump_eyes&&!frame_diag.colorprobe);
     FILE *config=fopen("vrdiag.once","w");assert(config);
     fputs("force_render=1\nautostart=1\nautostart_tick=42\n",config);fclose(config);
     frame_diag_load();assert(frame_diag.autostart_tick==42&&!coin_frames&&!frame_diag.auto_fire_delay_ticks);
+    assert(!frame_diag.sprite_report&&!frame_diag.dump_eyes&&!frame_diag.colorprobe);
+    assert(sprite_report_arm_calls==1&&!sprite_report_last_arm); /* Omitted key keeps reporting off. */
+
     config=fopen("vrdiag.once","w");assert(config);
-    fputs("force_render=1\nautostart=1\ndump_tick=600\npose_report=1\ngrip_anchor=1\n",config);fclose(config);
+    fputs("sprite_report=1\ncolorprobe=1\ndump_tick=3\n",config);fclose(config);
+    frame_diag_load();assert(frame_diag.sprite_report&&frame_diag.dump_eyes&&!frame_diag.colorprobe);
+    assert(sprite_report_arm_calls==2&&sprite_report_last_arm); /* One explicit load arms the reporter once. */
+    frame_diag.input_ticks=2;assert(!frame_diag_dump_ready());
+    frame_diag.input_ticks=3;assert(frame_diag_dump_ready()); /* Load-time dump_tick gates the production capture path. */
+
+    config=fopen("vrdiag.once","w");assert(config);
+    fputs("force_render=1\nautostart=1\ndump_tick=600\ndump_eyes=0\ncolorprobe=0\npose_report=1\ngrip_anchor=1\nsprite_report=0\n",config);fclose(config);
     frame_diag_load();assert(frame_diag.autostart_tick==600&&frame_diag.pose_report&&frame_diag.grip_anchor&&!coin_frames&&!frame_diag.auto_fire_delay_ticks);
+    assert(!frame_diag.sprite_report&&!frame_diag.dump_eyes&&!frame_diag.colorprobe);
+    assert(sprite_report_arm_calls==3&&!sprite_report_last_arm);
     remove("vrdiag.last");
     frame_diag.grip_anchor=false;
     uint32_t width,height;
@@ -462,7 +568,10 @@ int main(void){
 }
 #else
 int main(void){
+    frame_capture_request_regressions();
+    frame_sprite_pair_report_regressions();
     frame_diagnostic_regressions();
+    frame_replay_tick_regressions();
 #ifdef TCVR_FRAME_PROFILE_UNSUPPORTED
     options_path="touch-fallback-test.cfg";
 #else

@@ -3,7 +3,14 @@
 #include "quest_refresh.h"
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 static void near(float a,float b){assert(fabsf(a-b)<.0001f);}
+#ifdef TCVR_STEAM_FRAME
+static size_t read_text(FILE *stream,char *out,size_t capacity){
+    fflush(stream);rewind(stream);size_t n=fread(out,1,capacity-1,stream);out[n]=0;return n;
+}
+#endif
 int main(void){
     const float full_rates[]={90,72,120,80},limited_rates[]={72,90,80},compat_rates[]={60,72};
     near(qrefresh_choose(full_rates,4,120),120);near(qrefresh_choose(limited_rates,3,120),90);
@@ -83,5 +90,44 @@ int main(void){
     for(int i=0;i<4;i++){q.rv[i].sx16=(i==1||i==2?640:0)*16;q.rv[i].sy16=(i>=2?480:0)*16;}
     qvr_scene_begin();for(int n=0;n<230;n++)qvr_scene_quad(&q);qvr_sprites_prepare(&mark,1);
     assert(qvr_sprite_corners(&mark,0,corners));near(corners[0][2],-29.4f);
+#ifdef TCVR_STEAM_FRAME
+    /* Exercise the same cached sprite and reconstructed polygon data consumed
+     * by ss22_draw, then gate its one-shot report on the paired dump tick. */
+    geo_quad far=q,near_quad=q;far.zsort=0x005678;far.order=77;near_quad.zsort=0x001234;near_quad.order=88;
+    for(int i=0;i<4;i++){far.rv[i].sx16=(i==1||i==2?640:0)*16;far.rv[i].sy16=(i>=2?480:0)*16;far.rv[i].z=30000;near_quad.rv[i]=far.rv[i];near_quad.rv[i].z=20000;}
+    qvr_scene_begin();qvr_scene_quad(&far);qvr_scene_quad(&near_quad);
+    sprite_item report_items[2]={
+        {.x0=350,.y0=180,.w=33,.h=33,.idx=17,.prioverchar=1,.tile=QVR_IMPACT_FIRST,.z=0},
+        {.x0=100,.y0=120,.w=40,.h=50,.idx=42,.prioverchar=0,.tile=100,.z=0x400123}
+    };
+    qvr_sprites_prepare(report_items,2);unsigned report_frame=qvr_scene_frame_number();
+    float report_corners[4][4];assert(qvr_sprite_corners(&report_items[0],0,report_corners));assert(!qvr_sprite_corners(&report_items[1],1,report_corners));
+    FILE *report=tmpfile();assert(report);
+    assert(!qvr_sprite_report_emit(report,600,true)); /* static/default state is off */
+    qvr_sprite_report_arm(false);assert(!qvr_sprite_report_emit(report,600,true));
+    qvr_sprite_report_arm(true);assert(!qvr_sprite_report_emit(report,599,false));
+    assert(qvr_sprite_report_emit(report,600,true));assert(!qvr_sprite_report_emit(report,601,true));
+    char report_text[8192];assert(read_text(report,report_text,sizeof report_text)>0);fclose(report);
+    char expected_header[160];snprintf(expected_header,sizeof expected_header,"[vr-sprite] snapshot scene_frame=%u simulation_tick=600 active_count=2 reported_count=2 truncated=0",report_frame);
+    assert(strstr(report_text,expected_header));
+    assert(strstr(report_text,"item=0 idx=17 tile=9368 z=0x000000 layer=0 sort_depth=0 bounds=(350,180,33,33) prioverchar=1 classification=impact_projected impact_depth_m=19.6000"));
+    assert(strstr(report_text,"nearest_world_depth_m=20.0000 world_zsort=0x001234 world_quad_order=88"));
+    assert(strstr(report_text,"item=1 idx=42 tile=100 z=0x400123 layer=2 sort_depth=291 bounds=(100,120,40,50) prioverchar=0 classification=flat_2d"));
+
+    /* The report is bounded to the renderer's 1024-entry cache and says when
+     * the upstream active count exceeded that cache. */
+    sprite_item many[1026]={0};
+    for(int i=0;i<1026;i++){many[i].idx=i;many[i].tile=100;many[i].x0=i%600;many[i].y0=10;many[i].w=1;many[i].h=1;many[i].z=1;}
+    qvr_scene_begin();qvr_sprites_prepare(many,1026);qvr_sprite_report_arm(true);
+    FILE *bounded=tmpfile();assert(bounded);assert(qvr_sprite_report_emit(bounded,601,true));
+    assert(fflush(bounded)==0&&fseek(bounded,0,SEEK_END)==0);long bounded_size=ftell(bounded);
+    assert(bounded_size>0&&bounded_size<1024*1024&&fseek(bounded,0,SEEK_SET)==0);
+    char *bounded_text=calloc((size_t)bounded_size+1,1);assert(bounded_text);
+    assert(fread(bounded_text,1,(size_t)bounded_size,bounded)==(size_t)bounded_size);fclose(bounded);
+    assert(strstr(bounded_text,"active_count=1026 reported_count=1024 truncated=1"));
+    assert(strstr(bounded_text,"item=1023 idx=1023"));assert(!strstr(bounded_text,"item=1024 idx=1024"));
+    unsigned report_lines=0;for(char *cursor=bounded_text;(cursor=strstr(cursor,"[vr-sprite]"));cursor+=11)report_lines++;
+    assert(report_lines==1025);free(bounded_text);
+#endif
     puts("PASS: VR timing/math, supported refresh selection, camera-aligned HUD/aim, surface shot marks, nearest hit, grid overflow and unchanged desktop projection");return 0;
 }

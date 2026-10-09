@@ -49,15 +49,33 @@ gun angle, right stick click changes default hand, left stick click resets angle
 
 Report: build ID from build-info.json, scene, aim alignment, world scale,
 HUD legibility, cover behavior, controls, comfort, audio and any crash.
-Visuals, controls and comfort remain headset-unverified until this wear check.
+Wearer-assisted validation has confirmed the Valve Frame profile, 2160×2160 per eye,
+120 Hz, settings reload and subjectively good smoothness. Full controls, paired scene
+captures, yaw/multiview, and audio still need validation.
 See evidence/ for the recorded build/package/device verification results.
 
 DISPLAY AND CURRENT ACCEPTANCE
 The default renderer uses separate eye passes with a 2160-pixel maximum per eye.
 frame-display.cfg can set eye_resolution=512..2160 and multiview=1 for comparison.
 The Frame build follows the runtime cadence; refresh is controlled by SteamVR.
-Startup, ROM persistence, eye-colour probe and opening-cutscene captures are verified
-unattended. Active Stage 1, multiview and repeated gameplay timing remain pending.
-The wearer reported that the barrel points too low; live pose/pitch comparison
-is pending. The optional grip-pivot diagnostic is experimental and off by default. No 120 Hz recommendation is made
-until the requested wearer-assisted measurement passes.
+Startup, ROM persistence and eye-colour probe are verified unattended. The wearer
+reached the opening train with the Valve Frame profile at 2160×2160 per eye and 120 Hz,
+confirmed settings reload, and described smoothness as good. The barrel had appeared
+too high; the wearer accepted saved `gun_pitch=-15` for their device. This is not the
+fresh-install default. One right-eye train capture shows TIME EXTENDED/WAIT; a paired
+capture, yaw sweep, multiview, full controls and audio assessment remain pending. Crate
+explosions appear over scenery and are under investigation.
+
+Sustained 120 FPS is not established. There are 62 clean pre-capture 240-frame reports;
+the last 15 show 6.66–7.12 ms render-wall time and 22–69 over-budget frames per report.
+Those counters are not compositor dropped-frame measurements. A diagnostic self-exit
+produced SIGSEGV after XR cleanup with no recovered stack. Normal Steam quit ended with
+status 137, which does not prove clean native shutdown. The grip-pivot diagnostic is
+experimental and off by default.
+
+For replaying the saved train session, place the input at
+`/sdcard/Documents/TimeCrisisVR/vrdiag-replay.inputs` and create
+`vrdiag-replay.once` beside it. Startup validates the recording header before selecting
+replay; malformed input preserves the marker, replay source, and normal session files.
+Replay does not rotate or create player recordings and keeps its EEPROM image in memory.
+The one-shot `vrdiag.once` still controls force-render and capture tick settings.

@@ -102,7 +102,7 @@ static struct Eye { XrSwapchain chain;uint32_t w,h,n;QSwapchainImage *images;GLu
 static double profile_parts[6],profile_thread;
 #ifdef TCVR_STEAM_FRAME
 typedef struct FrameDiagnostic {
-    bool force_render,synthetic,synthetic_hands,autostart,autostart_started,colorprobe,dump_eyes,dump_hud,timing,pose_report,grip_anchor;
+    bool force_render,synthetic,synthetic_hands,autostart,autostart_started,colorprobe,dump_eyes,dump_hud,timing,pose_report,grip_anchor,sprite_report,replay;
     float yaw_degrees,hand_yaw_degrees;
     unsigned probe_seconds,self_exit_seconds,dump_tick,autostart_tick,auto_fire_ticks,auto_fire_delay_ticks;
     uint64_t started_ms,probe_started_ms,input_ticks;
@@ -138,7 +138,9 @@ static const char *frame_diag_anchor_source(void){
     return frame_gun_anchor==FRAME_GUN_ANCHOR_SYNTHETIC_HANDS?"synthetic_hands":"live";
 }
 static void frame_diag_load(void){
-    FILE *f=fopen("vrdiag.once","r");if(!f)return;
+    const char *replay_env=getenv("TCVR_FRAME_REPLAY");
+    frame_diag.replay=replay_env&&!strcmp(replay_env,"1");
+    FILE *f=fopen("vrdiag.once","r");if(!f){if(frame_diag.replay)fprintf(stderr,"[vr] deterministic replay active tick_source=rr_frame\n");return;}
     char line[160];int value;float degrees;bool autostart_tick_set=false;
     while(fgets(line,sizeof line,f)){
         if(sscanf(line,"force_render=%d",&value)==1)frame_diag.force_render=value==1;
@@ -151,6 +153,7 @@ static void frame_diag_load(void){
         else if(sscanf(line,"timing=%d",&value)==1)frame_diag.timing=value==1;
         else if(sscanf(line,"pose_report=%d",&value)==1)frame_diag.pose_report=value==1;
         else if(sscanf(line,"grip_anchor=%d",&value)==1)frame_diag.grip_anchor=value==1;
+        else if(sscanf(line,"sprite_report=%d",&value)==1)frame_diag.sprite_report=value==1;
         else if(sscanf(line,"diag_yaw=%f",&degrees)==1&&isfinite(degrees))frame_diag.yaw_degrees=fmodf(degrees,360.f);
         else if(sscanf(line,"diag_hand_yaw=%f",&degrees)==1&&isfinite(degrees))frame_diag.hand_yaw_degrees=fmodf(degrees,360.f);
         else if(sscanf(line,"probe_seconds=%d",&value)==1&&value>0)frame_diag.probe_seconds=(unsigned)(value>60?60:value);
@@ -161,10 +164,13 @@ static void frame_diag_load(void){
     fclose(f);remove("vrdiag.last");rename("vrdiag.once","vrdiag.last");
     frame_diag.started_ms=SDL_GetTicks64();
     if(frame_diag.colorprobe&&!frame_diag.probe_seconds)frame_diag.probe_seconds=3;
+    if(frame_diag.sprite_report){frame_diag.dump_eyes=true;if(frame_diag.colorprobe){fprintf(stderr,"[vr] sprite_report disables colorprobe to preserve the paired scene capture\n");frame_diag.colorprobe=false;}}
     if(frame_diag.autostart&&!autostart_tick_set)frame_diag.autostart_tick=600;
-    fprintf(stderr,"[vr] one-shot diagnostic loaded force_render=%d synthetic=%d hands=%d autostart=%d autostart_tick=%u probe_seconds=%u dump_eyes=%d dump_hud=%d dump_tick=%u timing=%d pose_report=%d grip_anchor=%d self_exit=%u\n",
+    qvr_sprite_report_arm(frame_diag.sprite_report);
+    fprintf(stderr,"[vr] one-shot diagnostic loaded force_render=%d synthetic=%d hands=%d autostart=%d autostart_tick=%u probe_seconds=%u dump_eyes=%d dump_hud=%d dump_tick=%u timing=%d pose_report=%d grip_anchor=%d sprite_report=%d replay=%d tick_source=%s self_exit=%u\n",
         frame_diag.force_render,frame_diag.synthetic,frame_diag.synthetic_hands,frame_diag.autostart,frame_diag.autostart_tick,frame_diag.probe_seconds,
-        frame_diag.dump_eyes,frame_diag.dump_hud,frame_diag.dump_tick,frame_diag.timing,frame_diag.pose_report,frame_diag.grip_anchor,frame_diag.self_exit_seconds);
+        frame_diag.dump_eyes,frame_diag.dump_hud,frame_diag.dump_tick,frame_diag.timing,frame_diag.pose_report,frame_diag.grip_anchor,frame_diag.sprite_report,
+        frame_diag.replay,frame_diag.replay?"rr_frame":"ss22_input_update",frame_diag.self_exit_seconds);
 }
 static void frame_diag_views(XrViewState *view_state){
     float yaw=frame_diag.yaw_degrees*(3.14159265358979323846f/180.f);
@@ -200,6 +206,49 @@ static bool frame_diag_probe_active(void){
     return frame_diag.colorprobe&&frame_diag.probe_seconds&&frame_diag.probe_started_ms&&SDL_GetTicks64()-frame_diag.probe_started_ms<frame_diag.probe_seconds*1000ULL;
 }
 static bool frame_diag_dump_ready(void){return !frame_diag.dump_tick||frame_diag.input_ticks>=frame_diag.dump_tick;}
+typedef struct FrameCaptureRequest {
+    bool latched,dump_eyes;
+    unsigned saved_eyes;
+    dev_t device;
+    ino_t inode;
+} FrameCaptureRequest;
+static FrameCaptureRequest frame_capture_request;
+static bool frame_capture_pair_begin(void){
+    frame_capture_request=(FrameCaptureRequest){0};
+    struct stat marker;
+    bool requested=stat("capture.request",&marker)==0;
+    frame_capture_request.dump_eyes=frame_diag.dump_eyes&&
+        (frame_diag_dump_ready()||(frame_diag.sprite_report&&requested));
+    if(!requested)return false;
+    frame_capture_request.latched=true;
+    frame_capture_request.device=marker.st_dev;
+    frame_capture_request.inode=marker.st_ino;
+    return true;
+}
+static bool frame_capture_request_latched(void){return frame_capture_request.latched;}
+static bool frame_diag_sprite_capture_ready(void);
+static bool frame_capture_pair_complete(int eye,bool saved){
+    if(!saved||eye<0||eye>1)return false;
+    bool report_ready=eye==1&&frame_diag.sprite_report&&frame_diag_sprite_capture_ready();
+    frame_capture_request.saved_eyes|=1u<<(unsigned)eye;
+    if(frame_capture_request.saved_eyes!=3u)return false;
+    if(frame_capture_request.dump_eyes)frame_diag.dump_eyes=false;
+    if(frame_capture_request.latched){
+        struct stat marker;
+        if(stat("capture.request",&marker)==0&&marker.st_dev==frame_capture_request.device&&marker.st_ino==frame_capture_request.inode){
+            if(unlink("capture.request")!=0)fprintf(stderr,"[XR] could not consume completed capture.request pair\n");
+        }
+        frame_capture_request.latched=false;
+    }
+#ifdef TCVR_STEAM_FRAME
+    if(eye==1&&frame_diag.sprite_report&&report_ready)
+        qvr_sprite_report_emit(stderr,frame_diag.input_ticks,true);
+#endif
+    return true;
+}
+static bool frame_diag_sprite_capture_ready(void){
+    return frame_diag_dump_ready()||(frame_diag.sprite_report&&frame_capture_request_latched());
+}
 
 static void frame_eye_dimensions(uint32_t recommended_width,uint32_t recommended_height,
                                  uint32_t maximum_width,uint32_t maximum_height,
@@ -504,14 +553,15 @@ static Q4 quat(XrQuaternionf q){return (Q4){q.x,q.y,q.z,q.w};}
 static V3 relative_position(XrVector3f p){return rotate(conjugate(origin_rotation),sub(vec(p),origin));}
 static Q4 relative_rotation(XrQuaternionf q){return product(conjugate(origin_rotation),quat(q));}
 
-static void capture_eye(int eye,int w,int h){
+static bool capture_eye(int eye,int w,int h){
 #ifdef TCVR_STEAM_FRAME
-    bool one_shot=frame_diag.dump_eyes&&frame_diag_dump_ready(),requested=access("capture.request",F_OK)==0;
-    if(!one_shot&&!requested)return;
+    bool one_shot=frame_capture_request.dump_eyes;
+    bool requested=frame_capture_request_latched();
+    if(!one_shot&&!requested)return false;
 #else
-    if(access("capture.request",F_OK))return;
+    if(access("capture.request",F_OK))return false;
 #endif
-    unsigned char *pixels=malloc((size_t)w*h*4);if(!pixels)return;
+    unsigned char *pixels=malloc((size_t)w*h*4);if(!pixels)return false;
     glPixelStorei(GL_PACK_ALIGNMENT,1);glReadPixels(0,0,w,h,GL_RGBA,GL_UNSIGNED_BYTE,pixels);
 #ifdef TCVR_STEAM_FRAME
     char name[96];if(one_shot){mkdir("vr-dumps",0775);snprintf(name,sizeof name,"vr-dumps/vr-eye%d.ppm",eye);}
@@ -519,16 +569,26 @@ static void capture_eye(int eye,int w,int h){
 #else
     char name[32];snprintf(name,sizeof name,"eye-%d.ppm",eye);
 #endif
-    FILE *f=fopen(name,"wb");
-    if(f){fprintf(f,"P6\n%d %d\n255\n",w,h);for(int y=h-1;y>=0;y--)for(int x=0;x<w;x++)fwrite(pixels+((size_t)y*w+x)*4,1,3,f);fclose(f);fprintf(stderr,"[XR] captured %s\n",name);}
-    free(pixels);if(eye==1){
+    FILE *f=fopen(name,"wb");bool saved=false;
+    if(f){
+        bool wrote=fprintf(f,"P6\n%d %d\n255\n",w,h)>=0;
+        for(int y=h-1;y>=0;y--)for(int x=0;x<w;x++)if(fwrite(pixels+((size_t)y*w+x)*4,1,3,f)!=3)wrote=false;
+        if(ferror(f))wrote=false;if(fclose(f)!=0)wrote=false;saved=wrote;
 #ifdef TCVR_STEAM_FRAME
-        if(one_shot)frame_diag.dump_eyes=false;
-        if(requested)unlink("capture.request");
+        if(saved){
+            if(frame_diag.sprite_report)fprintf(stderr,"[XR] captured %s scene_frame=%u simulation_tick=%llu\n",name,qvr_scene_frame_number(),(unsigned long long)frame_diag.input_ticks);
+            else fprintf(stderr,"[XR] captured %s\n",name);
+        }else fprintf(stderr,"[XR] failed to complete %s\n",name);
 #else
+        if(saved)fprintf(stderr,"[XR] captured %s\n",name);
+#endif
+    }
+    free(pixels);if(eye==1){
+#ifndef TCVR_STEAM_FRAME
         unlink("capture.request");
 #endif
     }
+    return saved;
 }
 
 static bool events(void){
@@ -1106,6 +1166,9 @@ bool ss22_host_frame(void){
         color_probe=frame_diag_probe_active();dump_hud=frame_diag.dump_hud&&frame_diag_dump_ready();
 #endif
         bool draw_frame=submit_frame||diagnostic_force;
+#ifdef TCVR_STEAM_FRAME
+        if(draw_frame)frame_capture_pair_begin();
+#endif
         bool frame_ok=true;
         float v[2][16],p[2][16];
         for(int i=0;i<2;i++){
@@ -1154,7 +1217,12 @@ bool ss22_host_frame(void){
 #ifdef TCVR_STEAM_FRAME
             if(i==1&&dump_hud){mkdir("vr-dumps",0775);bool saved=qui_capture_ppm("vr-dumps/vr-hud.ppm");fprintf(stderr,"[vr] HUD dump %s\n",saved?"written":"failed");frame_diag.dump_hud=false;}
 #endif
+#ifdef TCVR_STEAM_FRAME
+            bool captured=capture_eye(i,eye->w,eye->h);
+            frame_capture_pair_complete(i,captured);
+#else
             capture_eye(i,eye->w,eye->h);
+#endif
             parts[3]+=wall_ms()-stage_start;stage_start=wall_ms();
             const GLenum discard[]={GL_DEPTH_ATTACHMENT};glInvalidateFramebuffer(GL_FRAMEBUFFER,1,discard);
             GLenum error=glGetError();if(error)fprintf(stderr,"[XR] eye %d GL error 0x%x\n",i,error);
@@ -1206,6 +1274,11 @@ bool ss22_host_frame(void){
 }
 #endif
 void ss22_input_init(const ss22_input_game *g){(void)g;}
+#ifdef TCVR_STEAM_FRAME
+void ss22_frame_replay_tick(uint32_t rr_frame){
+    if(frame_diag.replay)frame_diag.input_ticks=rr_frame;
+}
+#endif
 void ss22_input_update(void){
     uint16_t bits=0;
 #ifdef TCVR_STEAM_FRAME
@@ -1241,7 +1314,14 @@ void ss22_input_update(void){
     g_ss22_gun_off=!aim_valid;g_ss22_gun_x=(uint16_t)(68+fminf(1,fmaxf(0,nx))*626);g_ss22_gun_y=(uint16_t)(43+fminf(1,fmaxf(0,ny))*241);
     ss22_snd_inputs(bits,0x200,0,0);
 }
-void ss22_input_neutral(void){trigger=pedal=0;shot_pending=shot_needs_release=fire_output_down=false;ss22_snd_inputs(0,0x200,0,0);}
+void ss22_input_neutral(void){
+    trigger=pedal=0;shot_pending=shot_needs_release=fire_output_down=false;
+#ifdef TCVR_STEAM_FRAME
+    /* Focus/options resets clear live edges, but replay owns the cabinet state. */
+    if(frame_diag.replay)return;
+#endif
+    ss22_snd_inputs(0,0x200,0,0);
+}
 const eng_ui_page *ss22_input_page(void){return NULL;}
 void ss22_input_event(const SDL_Event *e){(void)e;}
 void ss22_input_motor(uint8_t b){(void)b;}
