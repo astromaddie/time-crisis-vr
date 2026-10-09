@@ -50,6 +50,18 @@ def verify_rom(path):
         fail('cannot verify ROM: ' + str(error))
     print('ROM verified (31 required chips; older filenames accepted).')
 
+def registration_response(reply):
+    try:
+        registered = json.loads(reply)
+    except json.JSONDecodeError:
+        fail('Steam registration returned an unreadable response: ' + reply.strip())
+    # devkit-utils uses a response file whose contents may be empty on success.
+    # An error key or missing/non-string success is an actual failure.
+    if not isinstance(registered, dict) or 'error' in registered or not isinstance(registered.get('success'), str):
+        fail('Steam title registration failed: ' + str(registered))
+    return registered['success']
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--verify-only', action='store_true')
@@ -135,11 +147,8 @@ chmod 777 "$HOME/Documents/TimeCrisisVR"
         remote('set -eu; cd "$HOME"; chmod 644 '+shlex.quote(staged_rom)+'; mv '+shlex.quote(staged_rom)+' Documents/TimeCrisisVR/timecris.zip; mv '+shlex.quote(staged_apk)+' devkit-game/TimeCrisisVR/TimeCrisisVR.apk')
         parms = {'gameid': TITLE, 'directory': '/home/steamos/devkit-game/' + TITLE, 'force_appid': '', 'argv': [TITLE + '.apk'], 'env': {}, 'settings': {'steam_play': '1', 'compat_tool': 'lepton'}, 'lepton_args': ''}
         reply = remote('cd "$HOME/devkit-utils" && python3 steam-client-create-shortcut --parms ' + shlex.quote(json.dumps(parms)), capture=True)
-        try: registered = json.loads(reply)
-        except json.JSONDecodeError: fail('Steam registration returned an unreadable response: ' + reply.strip())
-        if registered.get('error') or not registered.get('success'):
-            fail('Steam title registration failed: ' + str(registered.get('error', registered)))
-        print('Steam registration: ' + str(registered['success']))
+        response = registration_response(reply)
+        print('Steam registration completed' + (': ' + response if response else '.'))
         print('Installed and registered ' + TITLE + '. Launch it from the Steam library.')
         print('Pre-install backup: /home/steamos/' + backup)
     finally:

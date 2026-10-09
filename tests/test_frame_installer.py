@@ -13,6 +13,11 @@ def rejects(function, message):
     except SystemExit as error: assert message in str(error), str(error)
     else: raise AssertionError('Expected rejection: '+message)
 
+assert m.registration_response('{"success":""}') == ''
+assert m.registration_response('{"success":"created"}') == 'created'
+for reply in ('{"error":"Steam rejected shortcut"}', '{"success":false}', '{"success":null}', '{}', 'not json'):
+    rejects(lambda reply=reply: m.registration_response(reply), 'registration')
+
 with tempfile.TemporaryDirectory(prefix='tcvr-installer-test-') as folder:
     root = Path(folder); bundle=root/'bundle'; (bundle/'payload').mkdir(parents=True)
     m.BASE=bundle; m.APK=bundle/'payload/TimeCrisisVR.apk'
@@ -58,4 +63,4 @@ with tempfile.TemporaryDirectory(prefix='tcvr-installer-test-') as folder:
     result=subprocess.run(['sh','-c',command.replace(str(home),str(symlink))],capture_output=True,text=True)
     assert result.returncode!=0 and 'symlink' in result.stderr
     assert not (symlink/'Documents/TimeCrisisVR-backups/test').exists()
-print('PASS: hashes, unexpected/traversal files, chip aliases/missing chip, backup bytes/modes/symlinks/absent roots, symlink-root rejection.')
+print('PASS: hashes, unexpected/traversal files, chip aliases/missing chip, backup bytes/modes/symlinks/absent roots, symlink-root rejection, actual Steam response contract.')
