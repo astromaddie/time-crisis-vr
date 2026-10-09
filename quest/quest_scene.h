@@ -5,6 +5,7 @@ extern int qvr_flat_view;
 #include "sprite_hw.h"
 #include "vr_math.h"
 #ifdef TCVR_STEAM_FRAME
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #endif
@@ -22,5 +23,9 @@ bool qvr_aim(V3 origin,V3 direction,float *nx,float *ny,V3 *hit);
 #ifdef TCVR_STEAM_FRAME
 unsigned qvr_scene_frame_number(void);
 void qvr_sprite_report_arm(bool enabled);
+/* Record the mixer's renderer inputs only while the one-shot scene report is armed. */
+void qvr_scene_report_mixer(bool valid, const uint8_t background[3], const uint8_t fog_rgb[3],
+                            bool poly_fade_enabled, const uint8_t poly_fade[3],
+                            const uint8_t screen_fade[3], uint8_t screen_fade_factor, uint8_t mixer_flags);
 bool qvr_sprite_report_emit(FILE *out,uint64_t simulation_tick,bool ready);
 #endif

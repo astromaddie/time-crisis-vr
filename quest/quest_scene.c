@@ -23,6 +23,12 @@ static struct { sprite_item item;float depth; } sprites[1024];
 static int sprite_count;
 #ifdef TCVR_STEAM_FRAME
 static int sprite_active_count;
+typedef struct {
+    bool valid, poly_fade_enabled;
+    uint8_t background[3], fog_rgb[3], poly_fade[3], screen_fade[3];
+    uint8_t screen_fade_factor, mixer_flags;
+} SceneMixerSnapshot;
+static SceneMixerSnapshot scene_mixer_snapshot;
 #endif
 /* Cache shot-mark depths once per game frame. The bounded screen grid avoids
  * rescanning every polygon for every animated mark; overflow uses a full scan. */
@@ -50,7 +56,7 @@ void qvr_vertex(const geo_quad *q,float x,float y,float z,float out[4]){
 }
 void qvr_scene_begin(void){count=0;camera_count=0;farthest=0;sprite_count=0;frame_number++;
 #ifdef TCVR_STEAM_FRAME
-    sprite_active_count=0;report_grid_ready=false;
+    sprite_active_count=0;report_grid_ready=false;scene_mixer_snapshot=(SceneMixerSnapshot){0};
 #endif
 }
 void qvr_scene_quad(const geo_quad *q){
@@ -156,6 +162,20 @@ void qvr_sprites_prepare(const sprite_item *items,int n){
 static bool sprite_report_armed,sprite_report_done;
 unsigned qvr_scene_frame_number(void){return frame_number;}
 void qvr_sprite_report_arm(bool enabled){sprite_report_armed=enabled;sprite_report_done=false;}
+void qvr_scene_report_mixer(bool valid,const uint8_t background[3],const uint8_t fog_rgb[3],
+                            bool poly_fade_enabled,const uint8_t poly_fade[3],
+                            const uint8_t screen_fade[3],uint8_t screen_fade_factor,uint8_t mixer_flags){
+    if(!sprite_report_armed||sprite_report_done)return;
+    if(!valid||!background||!fog_rgb||!poly_fade||!screen_fade){scene_mixer_snapshot.valid=false;return;}
+    scene_mixer_snapshot.valid=true;
+    memcpy(scene_mixer_snapshot.background,background,3);
+    memcpy(scene_mixer_snapshot.fog_rgb,fog_rgb,3);
+    memcpy(scene_mixer_snapshot.poly_fade,poly_fade,3);
+    memcpy(scene_mixer_snapshot.screen_fade,screen_fade,3);
+    scene_mixer_snapshot.poly_fade_enabled=poly_fade_enabled;
+    scene_mixer_snapshot.screen_fade_factor=screen_fade_factor;
+    scene_mixer_snapshot.mixer_flags=mixer_flags;
+}
 static const char *sprite_classification(const sprite_item *item,float projected_depth){
     if(!impact(item))return "flat_2d";
     if(qvr_flat_view)return "impact_candidate_flat_view";
@@ -165,8 +185,14 @@ bool qvr_sprite_report_emit(FILE *out,uint64_t simulation_tick,bool ready){
     if(!sprite_report_armed||sprite_report_done||!ready||!out)return false;
     sprite_report_done=true;sprite_report_armed=false;
     if(!report_grid_ready)build_grid();
-    fprintf(out,"[vr-sprite] snapshot scene_frame=%u simulation_tick=%llu active_count=%d reported_count=%d truncated=%d triangles=%u camera=(%.3f,%.3f,%.3f) flat_view=%d\n",
-        frame_number,(unsigned long long)simulation_tick,sprite_active_count,sprite_count,sprite_active_count>sprite_count,count,flat_camera.focal,flat_camera.cx,flat_camera.cy,qvr_flat_view);
+    const bool fade_active=scene_mixer_snapshot.valid&&(scene_mixer_snapshot.mixer_flags&1u)&&scene_mixer_snapshot.screen_fade_factor;
+    fprintf(out,"[vr-sprite] snapshot scene_frame=%u simulation_tick=%llu active_count=%d reported_count=%d truncated=%d triangles=%u camera=(%.3f,%.3f,%.3f) flat_view=%d mixer_valid=%d bg=%02X%02X%02X fog_rgb=%02X%02X%02X poly_fade_enabled=%d poly_fade_rgb=%02X%02X%02X screen_fade_active=%d screen_fade_rgb=%02X%02X%02X screen_fade_factor=0x%02X mixer_flags=0x%02X\n",
+        frame_number,(unsigned long long)simulation_tick,sprite_active_count,sprite_count,sprite_active_count>sprite_count,count,flat_camera.focal,flat_camera.cx,flat_camera.cy,qvr_flat_view,
+        scene_mixer_snapshot.valid,scene_mixer_snapshot.background[0],scene_mixer_snapshot.background[1],scene_mixer_snapshot.background[2],
+        scene_mixer_snapshot.fog_rgb[0],scene_mixer_snapshot.fog_rgb[1],scene_mixer_snapshot.fog_rgb[2],scene_mixer_snapshot.poly_fade_enabled,
+        scene_mixer_snapshot.poly_fade[0],scene_mixer_snapshot.poly_fade[1],scene_mixer_snapshot.poly_fade[2],fade_active,
+        scene_mixer_snapshot.screen_fade[0],scene_mixer_snapshot.screen_fade[1],scene_mixer_snapshot.screen_fade[2],
+        scene_mixer_snapshot.screen_fade_factor,scene_mixer_snapshot.mixer_flags);
     for(int i=0;i<sprite_count;i++){
         const sprite_item *item=&sprites[i].item;uint32_t world_sort=0;int world_order=0;float world_depth=0;
         bool has_world=surface_hit(item->x0+item->w*.5f,item->y0+item->h*.5f,&world_depth,&world_sort,&world_order);

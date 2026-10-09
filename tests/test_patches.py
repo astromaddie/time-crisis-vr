@@ -26,6 +26,10 @@ with tempfile.TemporaryDirectory(prefix='tcvr-patch-') as directory:
     assert 'ss22_frame_replay_tick(rr_frame);' in run_source
     assert 'if (win_scale && tcvr_frame_replay_eeprom_persist_allowed(rep_path != NULL)) ss22_eeprom_persist(nvfile);' in run_source
     assert 'static void in_update(void) { if (!start_on && !autoplay && !rep_f) ss22_input_update(); }' in run_source
+    gl_source=once['engine/ss22_gl.c']
+    mixer_report='qvr_scene_report_mixer(g_fog_valid, g_fog.bg, g_fog.fog_rgb, g_fog.poly_fade_enabled, g_fog.poly_fade, g_fog.screen_fade, g_fog.screen_fade_factor, g_fog.mixer_flags);'
+    assert mixer_report in gl_source
+    assert gl_source.index('gun_flash_filter();') < gl_source.index(mixer_report), 'snapshot must report the values the renderer will draw after flash filtering'
 status=subprocess.check_output(['git','status','--porcelain'],cwd=ROOT/'upstream',text=True)
 assert not status,('canonical upstream worktree is dirty',status)
-print('PASS: 9 Frame build-view patches change the pinned sources once, preserve replay input/EEPROM guards, reproduce idempotently and leave canonical upstream clean.')
+print('PASS: Frame build-view patches change the pinned sources once, preserve replay input/EEPROM guards, reproduce idempotently and leave canonical upstream clean.')

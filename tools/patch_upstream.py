@@ -200,6 +200,11 @@ static size_t spr_cache_bytes;'''),
          '    glEnd();\n#ifdef TCVR\n    }\n#endif\n    glDisable(GL_BLEND);\n    glEnable(GL_ALPHA_TEST);\n    glDisable(GL_TEXTURE_2D);\n}'),
     ], marker='TCVR_IMPACT_PROJECTION')
 
+    edit('engine/ss22_gl.c', [
+        ('    for (int i = 0; i < qn; ++i) qvr_scene_quad(&qbuf[i]);\n    qvr_sprites_prepare(items, ni);',
+         '    for (int i = 0; i < qn; ++i) qvr_scene_quad(&qbuf[i]);\n#ifdef TCVR_STEAM_FRAME\n    qvr_scene_report_mixer(g_fog_valid, g_fog.bg, g_fog.fog_rgb, g_fog.poly_fade_enabled, g_fog.poly_fade, g_fog.screen_fade, g_fog.screen_fade_factor, g_fog.mixer_flags);\n#endif\n    qvr_sprites_prepare(items, ni);'),
+    ], marker='TCVR_FRAME_MIXER_REPORT')
+
     edit('engine/ss22_run.c', [
         ('#include "ss22_host.h"', '#include "ss22_host.h"\n#ifdef TCVR_STEAM_FRAME\n#include "frame_replay.h"\n#endif'),
         ('            rep_read();\n        }\n        return;\n    }\n    if (start_name', '            rep_read();\n        }\n#ifdef TCVR_STEAM_FRAME\n        extern void ss22_frame_replay_tick(uint32_t rr_frame);\n        ss22_frame_replay_tick(rr_frame);\n#endif\n        return;\n    }\n    if (start_name'),

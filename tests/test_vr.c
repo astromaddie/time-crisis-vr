@@ -105,14 +105,26 @@ int main(void){
     FILE *report=tmpfile();assert(report);
     assert(!qvr_sprite_report_emit(report,600,true)); /* static/default state is off */
     qvr_sprite_report_arm(false);assert(!qvr_sprite_report_emit(report,600,true));
-    qvr_sprite_report_arm(true);assert(!qvr_sprite_report_emit(report,599,false));
+    qvr_sprite_report_arm(true);
+    const uint8_t bg[3]={0x11,0x22,0x33},fog_rgb[3]={0x44,0x55,0x66},poly_fade[3]={0x70,0x80,0x90},screen_fade[3]={0xff,0xff,0x00};
+    qvr_scene_report_mixer(true,bg,fog_rgb,true,poly_fade,screen_fade,0x80,0x01);
+    assert(!qvr_sprite_report_emit(report,599,false));
     assert(qvr_sprite_report_emit(report,600,true));assert(!qvr_sprite_report_emit(report,601,true));
     char report_text[8192];assert(read_text(report,report_text,sizeof report_text)>0);fclose(report);
     char expected_header[160];snprintf(expected_header,sizeof expected_header,"[vr-sprite] snapshot scene_frame=%u simulation_tick=600 active_count=2 reported_count=2 truncated=0",report_frame);
     assert(strstr(report_text,expected_header));
+    assert(strstr(report_text,"mixer_valid=1 bg=112233 fog_rgb=445566 poly_fade_enabled=1 poly_fade_rgb=708090 screen_fade_active=1 screen_fade_rgb=FFFF00 screen_fade_factor=0x80 mixer_flags=0x01"));
     assert(strstr(report_text,"item=0 idx=17 tile=9368 z=0x000000 layer=0 sort_depth=0 bounds=(350,180,33,33) prioverchar=1 classification=impact_projected impact_depth_m=19.6000"));
     assert(strstr(report_text,"nearest_world_depth_m=20.0000 world_zsort=0x001234 world_quad_order=88"));
     assert(strstr(report_text,"item=1 idx=42 tile=100 z=0x400123 layer=2 sort_depth=291 bounds=(100,120,40,50) prioverchar=0 classification=flat_2d"));
+
+    /* A stored yellow fade color is not active unless the mixer gate is on. */
+    qvr_sprite_report_arm(true);qvr_scene_begin();qvr_scene_quad(&near_quad);
+    qvr_scene_report_mixer(true,bg,fog_rgb,true,poly_fade,screen_fade,0xff,0x00);
+    qvr_sprites_prepare(report_items,2);
+    FILE *inactive=tmpfile();assert(inactive);assert(qvr_sprite_report_emit(inactive,601,true));
+    char inactive_text[1024];assert(read_text(inactive,inactive_text,sizeof inactive_text)>0);fclose(inactive);
+    assert(strstr(inactive_text,"mixer_valid=1 bg=112233 fog_rgb=445566 poly_fade_enabled=1 poly_fade_rgb=708090 screen_fade_active=0 screen_fade_rgb=FFFF00 screen_fade_factor=0xFF mixer_flags=0x00"));
 
     /* The report is bounded to the renderer's 1024-entry cache and says when
      * the upstream active count exceeded that cache. */
@@ -125,9 +137,10 @@ int main(void){
     char *bounded_text=calloc((size_t)bounded_size+1,1);assert(bounded_text);
     assert(fread(bounded_text,1,(size_t)bounded_size,bounded)==(size_t)bounded_size);fclose(bounded);
     assert(strstr(bounded_text,"active_count=1026 reported_count=1024 truncated=1"));
+    assert(strstr(bounded_text,"mixer_valid=0 bg=000000 fog_rgb=000000 poly_fade_enabled=0 poly_fade_rgb=000000 screen_fade_active=0 screen_fade_rgb=000000 screen_fade_factor=0x00 mixer_flags=0x00"));
     assert(strstr(bounded_text,"item=1023 idx=1023"));assert(!strstr(bounded_text,"item=1024 idx=1024"));
     unsigned report_lines=0;for(char *cursor=bounded_text;(cursor=strstr(cursor,"[vr-sprite]"));cursor+=11)report_lines++;
     assert(report_lines==1025);free(bounded_text);
 #endif
-    puts("PASS: VR timing/math, supported refresh selection, camera-aligned HUD/aim, surface shot marks, nearest hit, grid overflow and unchanged desktop projection");return 0;
+    puts("PASS: VR timing/math, supported refresh selection, camera-aligned HUD/aim, surface shot marks, bounded sprite/mixer report, nearest hit, grid overflow and unchanged desktop projection");return 0;
 }
