@@ -172,7 +172,7 @@ static void frame_pose_report_regressions(const char *expected_profile){
     assert(gun_tracked&&aim_valid); /* Production gun remains driven by aim pose, never grip pose. */
     FILE *out=tmpfile();assert(out);frame_diag_report_poses(out,sample_time);char *text=read_report(out);fclose(out);
     assert(strstr(text,"[vr-pose]")&&strstr(text,expected_profile));
-    assert(strstr(text,"hand=left weapon_hand=left pitch=7deg render_source=live"));
+    assert(strstr(text,"hand=left weapon_hand=left pitch=7deg render_source=live anchor=aim anchor_source=live"));
     assert(strstr(text,"aim{flags=0x3,pos=(0.400,1.900,-0.700)"));
     assert(strstr(text,"grip{flags=0x3,pos=(-0.200,1.300,-0.400)"));
     assert(strstr(text,"grip_to_aim_m=(0.600,0.600,-0.300)"));
@@ -190,7 +190,8 @@ static void frame_pose_report_regressions(const char *expected_profile){
     sync_input(next_sample,true,1.7f);
     assert(pose_locate_time[0][RIGHT_HAND]==next_sample&&pose_locate_time[1][RIGHT_HAND]==next_sample);
     out=tmpfile();assert(out);frame_diag_report_poses(out,next_sample);text=read_report(out);fclose(out);
-    assert(strstr(text,"grip_to_aim=unavailable(grip:orientation-invalid)")&&strstr(text,"render_source=synthetic_hands")&&
+    assert(strstr(text,"grip_to_aim=unavailable(grip:orientation-invalid)")&&
+           strstr(text,"render_source=synthetic_hands anchor=synthetic_hands anchor_source=synthetic_hands")&&
            strstr(text,"aim{flags=0x3,pos=(0.400,1.900,-0.700)"));free(text);
     frame_diag.synthetic_hands=false;pose_flags[1][RIGHT_HAND]=XR_SPACE_LOCATION_POSITION_VALID_BIT|XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
     pose_locate_result[1][RIGHT_HAND]=XR_ERROR_RUNTIME_FAILURE;XrTime failed_time=sample_time+2000000000LL;
@@ -211,16 +212,79 @@ static void frame_pose_report_regressions(const char *expected_profile){
     custom_pose_values=false;frame_diag.pose_report=false;frame_pose_report.samples_ready=false;
     frame_pose_report.next_log[LEFT_HAND]=frame_pose_report.next_log[RIGHT_HAND]=0;
 }
+static bool near3(V3 a,V3 b){return fabsf(a.x-b.x)<1e-5f&&fabsf(a.y-b.y)<1e-5f&&fabsf(a.z-b.z)<1e-5f;}
+static void frame_grip_anchor_regressions(void){
+    int old_hand=active_weapon_hand,old_pitch=options.gun_pitch;
+    origin=v3(0,1.65f,0);origin_rotation=(Q4){0,0,0,1};origin_set=true;
+    custom_pose_values=true;frame_diag.synthetic_hands=false;frame_diag.pose_report=false;frame_diag.grip_anchor=false;
+    frame_diag.hand_yaw_degrees=0;options.gun_pitch=7;
+    for(int hand=0;hand<HAND_COUNT;hand++){
+        frame_diag.synthetic_hands=false;frame_diag.pose_report=false;frame_diag.grip_anchor=false;
+        frame_pose_report=(FramePoseReport){0};
+        for(int kind=0;kind<2;kind++)for(int h=0;h<HAND_COUNT;h++)pose_locate_time[kind][h]=-1;
+        pose_flags[0][hand]=pose_flags[1][hand]=XR_SPACE_LOCATION_POSITION_VALID_BIT|XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
+        pose_active[0][hand]=pose_active[1][hand]=true;
+        pose_locate_result[0][hand]=pose_locate_result[1][hand]=XR_SUCCESS;
+        active_weapon_hand=hand;
+        XrTime base=50000000000LL+(XrTime)hand*10000000000LL;
+        sync_input(base,true,1.7f);
+        V3 aim_position=relative_position(pose_values[0][hand].position);
+        assert(near3(gun_position,aim_position)&&frame_gun_anchor==FRAME_GUN_ANCHOR_AIM);
+        assert(pose_locate_time[1][hand]==-1); /* Default-off path does not poll grip for rendering. */
+        V3 aim_muzzle=gun_origin,aim_target=gun_hit,aim_direction=rotate(gun_rotation,v3(0,0,-1));Q4 aim_rotation=gun_rotation;
+
+        frame_diag.grip_anchor=true;
+        if(hand==RIGHT_HAND)pose_flags[1][hand]=XR_SPACE_LOCATION_POSITION_VALID_BIT; /* Anchor only needs position validity. */
+        XrTime grip_time=base+100000000LL;sync_input(grip_time,true,1.7f);
+        V3 grip_position=relative_position(pose_values[1][hand].position),delta=sub(grip_position,aim_position);
+        assert(pose_locate_time[1][hand]==grip_time&&frame_pose_report.grip[hand].action_active&&frame_pose_report.grip[hand].locate_attempted);
+        assert(frame_gun_anchor==FRAME_GUN_ANCHOR_GRIP&&near3(gun_position,grip_position));
+        assert(fabsf(gun_rotation.x-aim_rotation.x)<1e-6f&&fabsf(gun_rotation.y-aim_rotation.y)<1e-6f&&
+               fabsf(gun_rotation.z-aim_rotation.z)<1e-6f&&fabsf(gun_rotation.w-aim_rotation.w)<1e-6f);
+        assert(near3(rotate(gun_rotation,v3(0,0,-1)),aim_direction));
+        assert(near3(sub(gun_origin,aim_muzzle),delta)&&near3(sub(gun_hit,aim_target),delta));
+
+        frame_diag.pose_report=true;XrTime report_time=grip_time+100000000LL;sync_input(report_time,true,1.7f);
+        FILE *out=tmpfile();assert(out);frame_diag_report_poses(out,report_time);char *text=read_report(out);fclose(out);
+        assert(frame_gun_anchor==FRAME_GUN_ANCHOR_GRIP&&strstr(text,"anchor=grip anchor_source=live"));free(text);
+
+        pose_locate_result[1][hand]=XR_ERROR_RUNTIME_FAILURE;
+        XrTime fallback_time=report_time+1000000000LL;sync_input(fallback_time,true,1.7f);
+        assert(frame_gun_anchor==FRAME_GUN_ANCHOR_AIM_FALLBACK&&near3(gun_position,aim_position));
+        assert(near3(rotate(gun_rotation,v3(0,0,-1)),aim_direction));
+        out=tmpfile();assert(out);frame_diag_report_poses(out,fallback_time);text=read_report(out);fclose(out);
+        assert(strstr(text,"anchor=aim_fallback anchor_source=live")&&strstr(text,"grip{unavailable(locate-error=-2)}"));free(text);
+        pose_locate_result[1][hand]=XR_SUCCESS;
+
+        frame_diag.synthetic_hands=true;XrTime synthetic_time=fallback_time+1000000000LL;
+        sync_input(synthetic_time,true,1.7f);frame_diag_hands();
+        assert(frame_gun_anchor==FRAME_GUN_ANCHOR_SYNTHETIC_HANDS);
+        assert(fabsf(gun_position.x-(hand==LEFT_HAND?-.28f:.28f))<1e-6f);
+        out=tmpfile();assert(out);frame_diag_report_poses(out,synthetic_time);text=read_report(out);fclose(out);
+        assert(strstr(text,"render_source=synthetic_hands anchor=synthetic_hands anchor_source=synthetic_hands"));free(text);
+        frame_diag.synthetic_hands=false;
+    }
+    custom_pose_values=false;frame_diag.synthetic_hands=false;frame_diag.pose_report=false;frame_diag.grip_anchor=false;
+    frame_gun_anchor=FRAME_GUN_ANCHOR_AIM;frame_pose_report=(FramePoseReport){0};
+    active_weapon_hand=old_hand;options.gun_pitch=old_pitch;
+    pose_flags[0][LEFT_HAND]=pose_flags[1][LEFT_HAND]=pose_flags[0][RIGHT_HAND]=pose_flags[1][RIGHT_HAND]=
+        XR_SPACE_LOCATION_POSITION_VALID_BIT|XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
+    pose_active[0][LEFT_HAND]=pose_active[1][LEFT_HAND]=pose_active[0][RIGHT_HAND]=pose_active[1][RIGHT_HAND]=true;
+    pose_locate_result[0][LEFT_HAND]=pose_locate_result[1][LEFT_HAND]=pose_locate_result[0][RIGHT_HAND]=pose_locate_result[1][RIGHT_HAND]=XR_SUCCESS;
+    puts("PASS: Frame grip anchor A/B uses valid grip position for both hands, preserves aim rotation and moves muzzle/ray together, falls back on locate error and skips synthetic hands");
+}
 static void frame_diagnostic_regressions(void){
     coin_frames=0;frame_diag.auto_fire_ticks=frame_diag.auto_fire_delay_ticks=0;
     frame_diag.autostart_started=false;frame_diag.input_ticks=0;
+    assert(!frame_diag.grip_anchor); /* Omitted one-shot keys retain the production-safe default. */
     FILE *config=fopen("vrdiag.once","w");assert(config);
     fputs("force_render=1\nautostart=1\nautostart_tick=42\n",config);fclose(config);
     frame_diag_load();assert(frame_diag.autostart_tick==42&&!coin_frames&&!frame_diag.auto_fire_delay_ticks);
     config=fopen("vrdiag.once","w");assert(config);
-    fputs("force_render=1\nautostart=1\ndump_tick=600\npose_report=1\n",config);fclose(config);
-    frame_diag_load();assert(frame_diag.autostart_tick==600&&frame_diag.pose_report&&!coin_frames&&!frame_diag.auto_fire_delay_ticks);
+    fputs("force_render=1\nautostart=1\ndump_tick=600\npose_report=1\ngrip_anchor=1\n",config);fclose(config);
+    frame_diag_load();assert(frame_diag.autostart_tick==600&&frame_diag.pose_report&&frame_diag.grip_anchor&&!coin_frames&&!frame_diag.auto_fire_delay_ticks);
     remove("vrdiag.last");
+    frame_diag.grip_anchor=false;
     uint32_t width,height;
     frame_eye_dimensions(1728,1440,2500,2500,2160,&width,&height);assert(width==2160&&height==1800);
     frame_eye_dimensions(1728,1440,2000,1700,2160,&width,&height);assert(width==2000&&height==1666);
@@ -425,7 +489,7 @@ int main(void){
     for(unsigned i=0;i<profile_counts[1];i++)
         assert(profile_bindings[1][i].action!=view_action&&profile_bindings[1][i].action!=cover_mode_action);
     focused=running=origin_set=true;current_profile=path("/interaction_profiles/oculus/touch_controller");update_frame_profile();
-    assert(!frame_profile_active);frame_pose_report_regressions("touch_fallback");
+    assert(!frame_profile_active);frame_pose_report_regressions("touch_fallback");frame_grip_anchor_regressions();
     options.left_handed=true;options.physical_crouch=false;paused=false;tick();
     click(lower_action,RIGHT_HAND);assert(coin_frames>0);coin_frames=0;
     click(lower_action,LEFT_HAND);assert(recenter_requested&&!recenter_calibration_requested);
@@ -466,7 +530,7 @@ int main(void){
     for(unsigned i=0;i<profile_counts[0];i++)assert(!strstr(paths[profile_bindings[0][i].binding],"system"));
 
     focused=running=origin_set=true;current_profile=frame_profile_path;update_frame_profile();assert(frame_profile_active);
-    frame_pose_report_regressions("steam_frame");
+    frame_pose_report_regressions("steam_frame");frame_grip_anchor_regressions();
     options.left_handed=true;options.laser_enabled=true;options.physical_crouch=false;options.gun_pitch=0;options_saved=qoptions_save(options_path,&options);
     active_weapon_hand=LEFT_HAND;cover_calibration_pending=true;tick();assert(!cover_calibration_pending);
     /* Frame's right-side A/B/X/Menu mapping ignores the saved default hand. */
