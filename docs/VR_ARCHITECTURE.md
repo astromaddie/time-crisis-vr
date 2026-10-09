@@ -39,24 +39,32 @@ Source, native build, Java packaging, APK signature/alignment, manifest, ABI, an
 
 ## Delivery and current acceptance
 
-The ROM-free installation bundle contains `install.sh`, `install.py`, `README.txt`, `payload/TimeCrisisVR.apk`, build metadata, evidence, and `SHA256SUMS`. Its installer verifies every delivered file and all 31 supplied chip hashes, takes a byte-for-byte and permission-preserving backup of existing title/data files, claims the shared Frame booking, and registers the persistent title ID `TimeCrisisVR`, displayed as **Devkit Game: TimeCrisisVR**. Launch that title through Steam for controller input. The checked-in installer templates are under `tools/steam_frame/bundle`; they run from the assembled delivery bundle.
+The ROM-free bundle contains the installer, README, APK, immutable build metadata, curated evidence and SHA256SUMS. The installer verifies all delivered files and all 31 supplied chip hashes, preserves bytes and permissions in a verified backup, claims the shared Frame booking and registers the persistent title ID `TimeCrisisVR`, displayed as **Devkit Game: TimeCrisisVR**. Launch through Steam for controller input. Installer templates live under `tools/steam_frame/bundle`.
 
-Host regressions cover production Quest/Frame/Touch input, View timing and focus rearm, timing/projection/aim math, options persistence, color negotiation, ROM import and persistent-storage failures, patch reproducibility, HUD capture orientation, replay selection and persistence guards, paired sprite-report timing, full native build modes, and installer integrity/backup behavior. The canonical upstream checkout must remain clean before the macOS build generates its disposable source view. Windows/ANGLE render tests were unavailable on the macOS host; device rendering and worn acceptance remain separate checks.
+Host regressions cover Quest/Frame/Touch routing, View timing and focus rearm, timing/projection/aim, options persistence, colour negotiation, ROM import and storage failures, patch reproducibility, HUD orientation, replay persistence guards, paired reports, native build modes and installer integrity/backup behavior. Windows/ANGLE render tests were unavailable on macOS. Device and worn evidence are separate gates.
+
+The tested APK was built from clean runtime source `3e6077444f9a293a2fa76263dbc9267c8955dfe8`; later documentation-only commits do not change that artifact. It is installed with matching size and SHA-256. Device experiments restore their diagnostic changes while preserving legitimate progress from wearer sessions.
 
 | Feature | Current device status |
 |---|---|
-| Steam registration, loader/session | verified unattended through Steam and Lepton |
-| Persistent ROM import | verified unattended: all 31 chips retained through container replacement and repeated launches |
-| Separate-eye color probe | verified unattended: left red/right blue, inspected 2160×2160 captures |
-| Separate-eye game rendering | worn opening train reached; right-eye TIME EXTENDED/WAIT capture; diagnostic replay produced a complete pair at tick8750, but train pair and yaw coverage remain pending |
-| Train crate explosions | wearer reports explosions overlay scenery; tick8750 snapshot shows a corridor and yellow rectangle; mixer/sprite placement is being investigated, no rendering correction has been accepted |
-| Multiview comparison | not started |
-| HUD and audio output | TIME EXTENDED/WAIT visible in the right-eye capture; full HUD and audio assessment pending |
-| Controller profile and gun fit | Valve Frame profile and 2160×2160 per eye verified at 120 Hz; wearer accepted saved `gun_pitch=-15` after reporting the barrel too high |
-| Repeated timing measurements and settings retention | settings reload verified; 62 clean pre-capture 240-frame reports, but sustained 120 FPS is not established |
-| Physical controls, ducking, recenter and comfort | production-path host tests pass; full worn acceptance pending |
-| Shutdown | diagnostic self-exit SIGSEGV after XR cleanup has no recovered stack; normal Steam quit status 137 does not establish clean native shutdown |
+| Steam registration, loader/session | verified through Steam and Lepton |
+| Persistent ROM import | all 31 chips retained through container replacement and repeated launches |
+| Separate-eye colour probe | left red/right blue, inspected 2160-square captures |
+| Separate-eye game rendering | opening cutscene and matched quiet train/crate eye pairs inspected; wearer reached the opening train |
+| Train crate explosions | corrected authored-depth placement accepted by the wearer on `3e60774`; matched active-flame A/B images unavailable; screen flash remains an overlay |
+| Yaw90/yaw180 and multiview comparison | queued; separate eye passes remain default |
+| HUD and audio | HUD inspected in matched eye pairs; 48 kHz output initialized, audible quality pending |
+| Controller profile and gun fit | Valve Frame profile observed; wearer accepted saved `gun_pitch=-15` after reporting the barrel too high; fresh default stays 0° |
+| Timing and settings retention | saved angle reload verified; 120 Hz runtime cadence observed at 2160-square eyes, sustained 120 FPS unproven |
+| Physical controls, ducking, recenter and comfort | production-path tests pass; full 15-minute worn checklist remains pending |
+| Shutdown | diagnostic self-exit SIGSEGV after XR cleanup lacks a usable stack; container stop/exit 137 does not establish graceful native shutdown |
 
-The supplied bundle README includes the 15-minute Stage 1 wear checklist. Full controls, comfort, audio perception and paired visual coverage still need that session. The wearer run logged 120 Hz and the wearer described smoothness as good, but sustained 120 FPS is not established: 62 clean pre-capture 240-frame reports were collected, and the last 15 show 6.66–7.12 ms render-wall time with 22–69 over-budget frames per report. These are render-wall counters, not compositor dropped-frame measurements. Image-dump runs include readback/file I/O and do not count as clean performance windows. A diagnostic self-exit produced SIGSEGV after XR cleanup without a recovered stack; normal Steam quit status 137 does not establish clean native shutdown.
+The latest candidate wearer run used normal input with image capture, pose logging, replay, synthetic controls, forced rendering and diagnostic self-exit disabled. Its 68 focused 240-frame reports at 120 Hz/2160-square eyes contain 16,320 frames. Window means were 4.88–7.25 ms (mean 6.898 ms), largest sample 88.16 ms and 3,520 reported budget misses. These CPU-observed render-wall counters are not GPU timings or compositor dropped frames and do not establish sustained 120 FPS. The wearer described smoothness as good. Earlier focus/dashboard transitions also selected 72 Hz and temporarily 60 Hz. Image readback and debugging runs are excluded from clean performance analysis.
 
-The first replay captured both eyes and the same-frame sprite report at arcade frame 8750. Its 459 common periodic emulator/DSP/sound-state lines through frame 9180 match the worn run byte for byte. The worn right-eye image was captured between frames 7500 and 7560, so the tick8750 synthetic-pose pair does not establish image parity or reproduce the reported train explosion. The mixer snapshot is intended to distinguish a game flash drawn on the inherited flat quad from a sprite-placement fault before changing rendering.
+Matched quiet-scene captures at arcade frame 7455 compare prior `a880bdc` and candidate `3e60774` using the same calibrated input. Both eyes retain the HUD and shot mark on the crate, 1,299 triangles, 11 layer-0 sprites and inactive fade. Fewer than 0.01% of colour channels differ; visually comparable, not byte-identical. These pairs contain no active world-effect sprites and validate the preserved path. The wearer then accepted the explosion correction subjectively. The earlier frame-8750 capture instead shows an authored yellow screen flash, confirmed by the mixer snapshot, and is not flame-depth evidence. An earlier uncalibrated crate-shot probe hit below the crate and is excluded.
+
+The README and supplied wear checklist cover Stage 1, both weapon hands, cover/reload, aim, ducking, pause, View holds, angle changes, audio and comfort. Short wearer sessions do not complete that checklist. After the wearer confirmed they finished and quit, the lingering not-visible Time Crisis container was scoped-stopped, diagnostics removed and new progress/options/EEPROM/recordings preserved.
+
+## Foveation investigation
+
+[Valve documents runtime foveation and eye tracking](https://partner.steamgames.com/doc/steamhardware/steamframe/engines/custom?l=english). Current app logs show GLES through Zink/Turnip and Valve FDM injection layers loaded; that does not prove active foveation or a performance benefit. The app does not request game-controlled foveation profiles. An optional future comparison needs CPU/GPU separation and repeated same-scene on/off runs at 2160-square resolution, including HUD and aiming sharpness. No foveation feature or default has been implemented in this milestone.
