@@ -1,4 +1,6 @@
-# Time Crisis VR for Meta Quest and Windows
+# Time Crisis VR for Steam Frame, Meta Quest and Windows
+
+This `steam-frame` branch adds a standalone ARM64 APK for Valve Steam Frame through Lepton, with persistent game data and Frame controller bindings. See [the Frame build and acceptance record](docs/VR_ARCHITECTURE.md). The Quest and Windows notes below retain upstream history and measurements.
 
 An experimental VR port of **Time Crisis** for **Meta Quest** and **Windows PCVR**, with a tracked 3D pistol, stereo rendering, original arcade gameplay and sound, and a choice of physical ducking or grip-controlled cover. Tested on Quest 3; the APK also declares Quest 2 and Quest 3S compatibility. The Windows build includes a mouse-controlled monitor mode.
 

@@ -17,6 +17,12 @@ static Q4 controller_rotation={0,0,0,1};
 static float triggers[2],grips[2];
 static XrTime trigger_times[2];
 static bool trigger_active[2]={true,true};
+static unsigned space_kind[5],space_hand[5];
+static XrTime pose_locate_time[2][2];
+static XrResult pose_locate_result[2][2];
+static XrPosef pose_values[2][2];
+static XrSpaceLocationFlags pose_flags[2][2];
+static bool pose_active[2][2]={{true,true},{true,true}},custom_pose_values;
 static XrPath last_haptic,last_stop;
 static XrResult sync_result=XR_SUCCESS;
 static uint16_t arcade_bits;
@@ -65,8 +71,15 @@ XRAPI_ATTR XrResult XRAPI_CALL xrAttachSessionActionSets(XrSession s,const XrSes
     (void)s;assert(a->countActionSets==1&&a->actionSets[0]==action_set);return XR_SUCCESS;
 }
 XRAPI_ATTR XrResult XRAPI_CALL xrCreateActionSpace(XrSession s,const XrActionSpaceCreateInfo *c,XrSpace *out){
-    (void)s;assert(c->action==aim_action&&dual[id(c->action)]);assert(c->poseInActionSpace.orientation.w==1);
-    int hand=hand_index(c->subactionPath);assert(hand<2);*out=(XrSpace)(uintptr_t)(hand+1);space_count++;return XR_SUCCESS;
+    (void)s;assert(dual[id(c->action)]);assert(c->poseInActionSpace.orientation.w==1);
+    int hand=hand_index(c->subactionPath);assert(hand<2);unsigned kind;
+    if(c->action==aim_action)kind=0;
+#ifdef TCVR_STEAM_FRAME
+    else if(c->action==grip_pose_action)kind=1;
+#endif
+    else {assert(!"Unexpected pose action space");return XR_ERROR_RUNTIME_FAILURE;}
+    unsigned handle=kind*2+(unsigned)hand+1;assert(handle<5);space_kind[handle]=kind;space_hand[handle]=(unsigned)hand;
+    *out=(XrSpace)(uintptr_t)handle;space_count++;return XR_SUCCESS;
 }
 XRAPI_ATTR XrResult XRAPI_CALL xrSyncActions(XrSession s,const XrActionsSyncInfo *c){
     (void)s;assert(c->countActiveActionSets==1);return sync_result;
@@ -83,8 +96,14 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateFloat(XrSession s,const XrActionS
     out->lastChangeTime=fire?trigger_times[h]:0;return XR_SUCCESS;
 }
 XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStatePose(XrSession s,const XrActionStateGetInfo *get,XrActionStatePose *out){
-    (void)s;assert(get->action==aim_action&&dual[id(get->action)]);int h=hand_index(get->subactionPath);assert(h<2);
-    out->isActive=connected[h];return XR_SUCCESS;
+    (void)s;int kind;
+    if(get->action==aim_action)kind=0;
+#ifdef TCVR_STEAM_FRAME
+    else if(get->action==grip_pose_action)kind=1;
+#endif
+    else {assert(!"Unexpected pose action query");return XR_ERROR_RUNTIME_FAILURE;}
+    assert(dual[id(get->action)]);int h=hand_index(get->subactionPath);assert(h<2);
+    out->isActive=connected[h]&&pose_active[kind][h];return XR_SUCCESS;
 }
 XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateVector2f(XrSession s,const XrActionStateGetInfo *get,XrActionStateVector2f *out){
     (void)s;assert(get->action==pitch_action&&get->subactionPath==XR_NULL_PATH);
@@ -92,9 +111,14 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateVector2f(XrSession s,const XrActi
     out->isActive=stick_active&&connected[RIGHT_HAND];out->currentState=(XrVector2f){0,stick_y};return XR_SUCCESS;
 }
 XRAPI_ATTR XrResult XRAPI_CALL xrLocateSpace(XrSpace space,XrSpace base,XrTime t,XrSpaceLocation *out){
-    (void)base;(void)t;int h=(int)(uintptr_t)space-1;assert(h==0||h==1);
-    out->locationFlags=tracked[h]?XR_SPACE_LOCATION_POSITION_VALID_BIT|XR_SPACE_LOCATION_ORIENTATION_VALID_BIT:0;
-    out->pose=(XrPosef){{controller_rotation.x,controller_rotation.y,controller_rotation.z,controller_rotation.w},{h==LEFT_HAND?-.25f:.25f,1.4f,-.5f}};return XR_SUCCESS;
+    (void)base;unsigned handle=(unsigned)(uintptr_t)space;assert(handle>0&&handle<5);
+    unsigned kind=space_kind[handle];int h=(int)space_hand[handle];pose_locate_time[kind][h]=t;
+    if(custom_pose_values){out->locationFlags=pose_flags[kind][h];out->pose=pose_values[kind][h];}
+    else{
+        out->locationFlags=kind==0&& !tracked[h]?0:XR_SPACE_LOCATION_POSITION_VALID_BIT|XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
+        out->pose=(XrPosef){{controller_rotation.x,controller_rotation.y,controller_rotation.z,controller_rotation.w},{h==LEFT_HAND?-.25f:.25f,1.4f,-.5f}};
+    }
+    return pose_locate_result[kind][h];
 }
 XRAPI_ATTR XrResult XRAPI_CALL xrApplyHapticFeedback(XrSession s,const XrHapticActionInfo *info,const XrHapticBaseHeader *v){
     (void)s;(void)v;assert(info->action==haptic_action&&dual[id(info->action)]);haptic_calls++;
@@ -124,6 +148,69 @@ static void frame_bound(unsigned profile,XrAction a,const char *name){
     for(unsigned i=0;i<profile_counts[profile];i++)if(profile_bindings[profile][i].action==a&&!strcmp(paths[profile_bindings[profile][i].binding],name))return;
     fprintf(stderr,"Missing Frame profile binding: %s\n",name);abort();
 }
+static char *read_report(FILE *out){
+    assert(fflush(out)==0&&fseek(out,0,SEEK_END)==0);long size=ftell(out);assert(size>=0&&fseek(out,0,SEEK_SET)==0);
+    char *text=calloc((size_t)size+1,1);assert(text);assert(fread(text,1,(size_t)size,out)==(size_t)size);return text;
+}
+static void frame_pose_report_regressions(const char *expected_profile){
+    const float radians=3.14159265358979323846f/180.f;
+    pose_values[0][LEFT_HAND]=(XrPosef){{0,sinf(30.f*radians/2),0,cosf(30.f*radians/2)},{.4f,1.9f,-.7f}};
+    pose_values[1][LEFT_HAND]=(XrPosef){{0,sinf(-20.f*radians/2),0,cosf(-20.f*radians/2)},{-.2f,1.3f,-.4f}};
+    pose_values[0][RIGHT_HAND]=(XrPosef){{0,0,sinf(15.f*radians/2),cosf(15.f*radians/2)},{.7f,1.7f,-.9f}};
+    pose_values[1][RIGHT_HAND]=(XrPosef){{0,0,sinf(-35.f*radians/2),cosf(-35.f*radians/2)},{-.3f,1.2f,-.5f}};
+    for(int kind=0;kind<2;kind++)for(int hand=0;hand<2;hand++)pose_flags[kind][hand]=XR_SPACE_LOCATION_POSITION_VALID_BIT|XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
+    pose_active[0][LEFT_HAND]=pose_active[1][LEFT_HAND]=pose_active[0][RIGHT_HAND]=pose_active[1][RIGHT_HAND]=true;
+    custom_pose_values=true;active_profile_path=!strcmp(expected_profile,"steam_frame")?frame_profile_path:touch_profile_path;
+    active_weapon_hand=LEFT_HAND;options.gun_pitch=7;frame_diag.synthetic_hands=false;
+    frame_diag.pose_report=true;frame_pose_report=(FramePoseReport){0};
+    const XrTime sample_time=1234567890LL;
+    sync_input(sample_time,true,1.7f);
+    assert(frame_pose_report.samples_ready);
+    assert(pose_locate_time[0][LEFT_HAND]==sample_time&&pose_locate_time[1][LEFT_HAND]==sample_time&&
+           pose_locate_time[0][RIGHT_HAND]==sample_time&&pose_locate_time[1][RIGHT_HAND]==sample_time);
+    assert(fabsf(gun_position.x-.4f)<1e-6f&&fabsf(gun_position.y-.25f)<1e-6f&&fabsf(gun_position.z+.7f)<1e-6f);
+    assert(gun_tracked&&aim_valid); /* Production gun remains driven by aim pose, never grip pose. */
+    FILE *out=tmpfile();assert(out);frame_diag_report_poses(out,sample_time);char *text=read_report(out);fclose(out);
+    assert(strstr(text,"[vr-pose]")&&strstr(text,expected_profile));
+    assert(strstr(text,"hand=left weapon_hand=left pitch=7deg render_source=live"));
+    assert(strstr(text,"aim{flags=0x3,pos=(0.400,1.900,-0.700)"));
+    assert(strstr(text,"grip{flags=0x3,pos=(-0.200,1.300,-0.400)"));
+    assert(strstr(text,"grip_to_aim_m=(0.600,0.600,-0.300)"));
+    assert(strstr(text,"grip_to_aim=50.00deg"));
+    assert(strstr(text,"gun=pos=(0.400,0.250,-0.700)"));
+    assert(strstr(text,"muzzle=")&&strstr(text,"direction=")&&strstr(text,"target_hit="));
+    assert(strstr(text,"hand=right weapon_hand=left")&&strstr(text,"grip{flags=0x3,pos=(-0.300,1.200,-0.500)"));
+    assert(strstr(text,"grip_to_aim_m=(1.000,0.500,-0.400)"));
+    assert(strstr(text,"grip_to_aim=50.00deg"));
+    free(text);
+    out=tmpfile();assert(out);frame_diag_report_poses(out,sample_time+500000000LL);text=read_report(out);fclose(out);
+    assert(!*text);free(text); /* Per-hand rate limit is one report per second. */
+    pose_flags[1][RIGHT_HAND]=XR_SPACE_LOCATION_POSITION_VALID_BIT;
+    frame_diag.synthetic_hands=true;XrTime next_sample=sample_time+1000000000LL;
+    sync_input(next_sample,true,1.7f);
+    assert(pose_locate_time[0][RIGHT_HAND]==next_sample&&pose_locate_time[1][RIGHT_HAND]==next_sample);
+    out=tmpfile();assert(out);frame_diag_report_poses(out,next_sample);text=read_report(out);fclose(out);
+    assert(strstr(text,"grip_to_aim=unavailable(grip:orientation-invalid)")&&strstr(text,"render_source=synthetic_hands")&&
+           strstr(text,"aim{flags=0x3,pos=(0.400,1.900,-0.700)"));free(text);
+    frame_diag.synthetic_hands=false;pose_flags[1][RIGHT_HAND]=XR_SPACE_LOCATION_POSITION_VALID_BIT|XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
+    pose_locate_result[1][RIGHT_HAND]=XR_ERROR_RUNTIME_FAILURE;XrTime failed_time=sample_time+2000000000LL;
+    sync_input(failed_time,true,1.7f);
+    out=tmpfile();assert(out);frame_diag_report_poses(out,failed_time);text=read_report(out);fclose(out);
+    assert(strstr(text,"grip{unavailable(locate-error=-2)}")&&
+           strstr(text,"grip_to_aim_m=unavailable(grip:locate-error)")&&
+           strstr(text,"grip_to_aim=unavailable(grip:locate-error)"));free(text);
+    pose_locate_result[1][RIGHT_HAND]=XR_SUCCESS;focused=false;
+    out=tmpfile();assert(out);frame_diag_report_poses(out,sample_time+3000000000LL);text=read_report(out);fclose(out);
+    assert(!*text);free(text);focused=true;
+    frame_diag.pose_report=false;
+    out=tmpfile();assert(out);frame_diag_report_poses(out,sample_time+2000000000LL);text=read_report(out);fclose(out);
+    assert(!*text);free(text);
+    pose_active[0][LEFT_HAND]=pose_active[1][LEFT_HAND]=pose_active[0][RIGHT_HAND]=pose_active[1][RIGHT_HAND]=true;
+    pose_flags[1][RIGHT_HAND]=XR_SPACE_LOCATION_POSITION_VALID_BIT|XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
+    pose_locate_result[0][LEFT_HAND]=pose_locate_result[1][LEFT_HAND]=pose_locate_result[0][RIGHT_HAND]=pose_locate_result[1][RIGHT_HAND]=XR_SUCCESS;
+    custom_pose_values=false;frame_diag.pose_report=false;frame_pose_report.samples_ready=false;
+    frame_pose_report.next_log[LEFT_HAND]=frame_pose_report.next_log[RIGHT_HAND]=0;
+}
 static void frame_diagnostic_regressions(void){
     coin_frames=0;frame_diag.auto_fire_ticks=frame_diag.auto_fire_delay_ticks=0;
     frame_diag.autostart_started=false;frame_diag.input_ticks=0;
@@ -131,8 +218,8 @@ static void frame_diagnostic_regressions(void){
     fputs("force_render=1\nautostart=1\nautostart_tick=42\n",config);fclose(config);
     frame_diag_load();assert(frame_diag.autostart_tick==42&&!coin_frames&&!frame_diag.auto_fire_delay_ticks);
     config=fopen("vrdiag.once","w");assert(config);
-    fputs("force_render=1\nautostart=1\ndump_tick=600\n",config);fclose(config);
-    frame_diag_load();assert(frame_diag.autostart_tick==600&&!coin_frames&&!frame_diag.auto_fire_delay_ticks);
+    fputs("force_render=1\nautostart=1\ndump_tick=600\npose_report=1\n",config);fclose(config);
+    frame_diag_load();assert(frame_diag.autostart_tick==600&&frame_diag.pose_report&&!coin_frames&&!frame_diag.auto_fire_delay_ticks);
     remove("vrdiag.last");
     uint32_t width,height;
     frame_eye_dimensions(1728,1440,2500,2500,2160,&width,&height);assert(width==2160&&height==1800);
@@ -324,11 +411,13 @@ int main(void){
 #ifndef TCVR_FRAME_PROFILE_UNSUPPORTED
     frame_profile_supported=true;
 #endif
-    assert(actions_init());assert(space_count==2&&action_count==12);
+    assert(actions_init());assert(space_count==4&&action_count==13);
 #ifdef TCVR_FRAME_PROFILE_UNSUPPORTED
-    assert(!frame_profile_supported&&profile_counts[0]==0&&profile_counts[1]==16&&profile_counts[2]==0);
+    assert(!frame_profile_supported&&profile_counts[0]==0&&profile_counts[1]==18&&profile_counts[2]==0);
     assert(!strcmp(profile_names[1],"/interaction_profiles/oculus/touch_controller"));
     frame_bound(1,lower_action,"/user/hand/right/input/a/click");
+    frame_bound(1,grip_pose_action,"/user/hand/left/input/grip/pose");
+    frame_bound(1,grip_pose_action,"/user/hand/right/input/grip/pose");
     frame_bound(1,lower_action,"/user/hand/left/input/x/click");
     frame_bound(1,upper_action,"/user/hand/right/input/b/click");
     frame_bound(1,upper_action,"/user/hand/left/input/y/click");
@@ -336,7 +425,8 @@ int main(void){
     for(unsigned i=0;i<profile_counts[1];i++)
         assert(profile_bindings[1][i].action!=view_action&&profile_bindings[1][i].action!=cover_mode_action);
     focused=running=origin_set=true;current_profile=path("/interaction_profiles/oculus/touch_controller");update_frame_profile();
-    assert(!frame_profile_active);options.left_handed=true;options.physical_crouch=false;paused=false;tick();
+    assert(!frame_profile_active);frame_pose_report_regressions("touch_fallback");
+    options.left_handed=true;options.physical_crouch=false;paused=false;tick();
     click(lower_action,RIGHT_HAND);assert(coin_frames>0);coin_frames=0;
     click(lower_action,LEFT_HAND);assert(recenter_requested&&!recenter_calibration_requested);
     assert(options.left_handed); /* Frame fallback keeps right A/B fixed. */
@@ -346,11 +436,12 @@ int main(void){
     puts("PASS: Touch fallback suggested and routed when Frame interaction profile is unavailable");
     return 0;
 #else
-    assert(profile_counts[0]==16&&profile_counts[1]==16&&profile_counts[2]==0);
+    assert(profile_counts[0]==18&&profile_counts[1]==18&&profile_counts[2]==0);
     assert(!strcmp(profile_names[0],"/interaction_profiles/valve/frame_controller_valve"));
     assert(!strcmp(profile_names[1],"/interaction_profiles/oculus/touch_controller"));
     assert(!strcmp(action_names[id(aim_action)],"aim")&&!strcmp(action_names[id(trigger_action)],"trigger"));
     assert(!strcmp(action_names[id(grip_action)],"grip_cover")&&!strcmp(action_names[id(view_action)],"view_back_recenter"));
+    assert(!strcmp(action_names[id(grip_pose_action)],"grip_pose")&&types[id(grip_pose_action)]==XR_ACTION_TYPE_POSE_INPUT&&dual[id(grip_pose_action)]);
     assert(!strcmp(action_names[id(cover_mode_action)],"cover_mode"));
     for(unsigned i=0;i<profile_counts[0];i++){
         XrPath p=profile_bindings[0][i].binding;assert(p!=XR_NULL_PATH&&profile_bindings[0][i].action!=XR_NULL_HANDLE);
@@ -359,6 +450,7 @@ int main(void){
     for(int hand=0;hand<2;hand++){
         char p[100];const char *side=hand?"right":"left";
         snprintf(p,sizeof p,"/user/hand/%s/input/aim/pose",side);frame_bound(0,aim_action,p);
+        snprintf(p,sizeof p,"/user/hand/%s/input/grip/pose",side);frame_bound(0,grip_pose_action,p);
         snprintf(p,sizeof p,"/user/hand/%s/input/trigger/value",side);frame_bound(0,trigger_action,p);
         snprintf(p,sizeof p,"/user/hand/%s/input/squeeze/value",side);frame_bound(0,grip_action,p);
         snprintf(p,sizeof p,"/user/hand/%s/output/haptic",side);frame_bound(0,haptic_action,p);
@@ -374,6 +466,7 @@ int main(void){
     for(unsigned i=0;i<profile_counts[0];i++)assert(!strstr(paths[profile_bindings[0][i].binding],"system"));
 
     focused=running=origin_set=true;current_profile=frame_profile_path;update_frame_profile();assert(frame_profile_active);
+    frame_pose_report_regressions("steam_frame");
     options.left_handed=true;options.laser_enabled=true;options.physical_crouch=false;options.gun_pitch=0;options_saved=qoptions_save(options_path,&options);
     active_weapon_hand=LEFT_HAND;cover_calibration_pending=true;tick();assert(!cover_calibration_pending);
     /* Frame's right-side A/B/X/Menu mapping ignores the saved default hand. */

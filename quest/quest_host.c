@@ -54,9 +54,10 @@ static XrSpace local_space,aim_spaces[HAND_COUNT];
 static XrActionSet action_set;
 static XrAction aim_action,trigger_action,grip_action,lower_action,upper_action,pause_action,haptic_action,hand_action,pitch_action,pitch_reset_action;
 #ifdef TCVR_STEAM_FRAME
-static XrAction view_action,cover_mode_action;
+static XrAction view_action,cover_mode_action,grip_pose_action;
+static XrSpace grip_pose_spaces[HAND_COUNT];
 #endif
-static XrPath frame_profile_path;
+static XrPath frame_profile_path,touch_profile_path,active_profile_path;
 static bool frame_profile_supported,frame_profile_active;
 static XrSessionState state;
 static bool running,quit,active,focused,paused,origin_set,recenter_requested,recenter_calibration_requested;
@@ -101,12 +102,23 @@ static struct Eye { XrSwapchain chain;uint32_t w,h,n;QSwapchainImage *images;GLu
 static double profile_parts[6],profile_thread;
 #ifdef TCVR_STEAM_FRAME
 typedef struct FrameDiagnostic {
-    bool force_render,synthetic,synthetic_hands,autostart,autostart_started,colorprobe,dump_eyes,dump_hud,timing;
+    bool force_render,synthetic,synthetic_hands,autostart,autostart_started,colorprobe,dump_eyes,dump_hud,timing,pose_report;
     float yaw_degrees,hand_yaw_degrees;
     unsigned probe_seconds,self_exit_seconds,dump_tick,autostart_tick,auto_fire_ticks,auto_fire_delay_ticks;
     uint64_t started_ms,probe_started_ms,input_ticks;
 } FrameDiagnostic;
+typedef struct FramePoseSample {
+    bool action_queried,action_active,locate_attempted;
+    XrResult action_result,locate_result;
+    XrSpaceLocation location;
+} FramePoseSample;
+typedef struct FramePoseReport {
+    FramePoseSample aim[HAND_COUNT],grip[HAND_COUNT];
+    XrTime next_log[HAND_COUNT];
+    bool samples_ready;
+} FramePoseReport;
 static FrameDiagnostic frame_diag;
+static FramePoseReport frame_pose_report;
 static void frame_diag_load(void){
     FILE *f=fopen("vrdiag.once","r");if(!f)return;
     char line[160];int value;float degrees;bool autostart_tick_set=false;
@@ -119,6 +131,7 @@ static void frame_diag_load(void){
         else if(sscanf(line,"dump_eyes=%d",&value)==1)frame_diag.dump_eyes=value==1;
         else if(sscanf(line,"dump_hud=%d",&value)==1)frame_diag.dump_hud=value==1;
         else if(sscanf(line,"timing=%d",&value)==1)frame_diag.timing=value==1;
+        else if(sscanf(line,"pose_report=%d",&value)==1)frame_diag.pose_report=value==1;
         else if(sscanf(line,"diag_yaw=%f",&degrees)==1&&isfinite(degrees))frame_diag.yaw_degrees=fmodf(degrees,360.f);
         else if(sscanf(line,"diag_hand_yaw=%f",&degrees)==1&&isfinite(degrees))frame_diag.hand_yaw_degrees=fmodf(degrees,360.f);
         else if(sscanf(line,"probe_seconds=%d",&value)==1&&value>0)frame_diag.probe_seconds=(unsigned)(value>60?60:value);
@@ -130,9 +143,9 @@ static void frame_diag_load(void){
     frame_diag.started_ms=SDL_GetTicks64();
     if(frame_diag.colorprobe&&!frame_diag.probe_seconds)frame_diag.probe_seconds=3;
     if(frame_diag.autostart&&!autostart_tick_set)frame_diag.autostart_tick=600;
-    fprintf(stderr,"[vr] one-shot diagnostic loaded force_render=%d synthetic=%d hands=%d autostart=%d autostart_tick=%u probe_seconds=%u dump_eyes=%d dump_hud=%d dump_tick=%u timing=%d self_exit=%u\n",
+    fprintf(stderr,"[vr] one-shot diagnostic loaded force_render=%d synthetic=%d hands=%d autostart=%d autostart_tick=%u probe_seconds=%u dump_eyes=%d dump_hud=%d dump_tick=%u timing=%d pose_report=%d self_exit=%u\n",
         frame_diag.force_render,frame_diag.synthetic,frame_diag.synthetic_hands,frame_diag.autostart,frame_diag.autostart_tick,frame_diag.probe_seconds,
-        frame_diag.dump_eyes,frame_diag.dump_hud,frame_diag.dump_tick,frame_diag.timing,frame_diag.self_exit_seconds);
+        frame_diag.dump_eyes,frame_diag.dump_hud,frame_diag.dump_tick,frame_diag.timing,frame_diag.pose_report,frame_diag.self_exit_seconds);
 }
 static void frame_diag_views(XrViewState *view_state){
     float yaw=frame_diag.yaw_degrees*(3.14159265358979323846f/180.f);
@@ -323,12 +336,16 @@ static bool actions_init(void){
        !action(&haptic_action,"recoil","Gun recoil",XR_ACTION_TYPE_VIBRATION_OUTPUT,true))return false;
 #ifdef TCVR_STEAM_FRAME
     if(!action(&view_action,"view_back_recenter","Back or hold to recenter",XR_ACTION_TYPE_BOOLEAN_INPUT,true)||
-       !action(&cover_mode_action,"cover_mode","Change cover mode in options",XR_ACTION_TYPE_BOOLEAN_INPUT,false))return false;
+       !action(&cover_mode_action,"cover_mode","Change cover mode in options",XR_ACTION_TYPE_BOOLEAN_INPUT,false)||
+       !action(&grip_pose_action,"grip_pose","Diagnostic physical grip pose",XR_ACTION_TYPE_POSE_INPUT,true))return false;
     frame_profile_path=path("/interaction_profiles/valve/frame_controller_valve");
+    touch_profile_path=path("/interaction_profiles/oculus/touch_controller");
     if(frame_profile_supported){
         XrActionSuggestedBinding frame[]={
             {aim_action,path("/user/hand/left/input/aim/pose")},
             {aim_action,path("/user/hand/right/input/aim/pose")},
+            {grip_pose_action,path("/user/hand/left/input/grip/pose")},
+            {grip_pose_action,path("/user/hand/right/input/grip/pose")},
             {trigger_action,path("/user/hand/left/input/trigger/value")},
             {trigger_action,path("/user/hand/right/input/trigger/value")},
             {grip_action,path("/user/hand/left/input/squeeze/value")},
@@ -349,6 +366,10 @@ static bool actions_init(void){
     XrActionSuggestedBinding touch[]={
         {aim_action,path("/user/hand/left/input/aim/pose")},
         {aim_action,path("/user/hand/right/input/aim/pose")},
+#ifdef TCVR_STEAM_FRAME
+        {grip_pose_action,path("/user/hand/left/input/grip/pose")},
+        {grip_pose_action,path("/user/hand/right/input/grip/pose")},
+#endif
         {trigger_action,path("/user/hand/left/input/trigger/value")},
         {trigger_action,path("/user/hand/right/input/trigger/value")},
         {grip_action,path("/user/hand/left/input/squeeze/value")},
@@ -375,14 +396,19 @@ static bool actions_init(void){
     if(!XR(xrAttachSessionActionSets(session,&attach)))return false;
     XrActionSpaceCreateInfo space={XR_TYPE_ACTION_SPACE_CREATE_INFO};space.action=aim_action;space.poseInActionSpace.orientation.w=1;
     for(int i=0;i<HAND_COUNT;i++){space.subactionPath=hand_paths[i];if(!XR(xrCreateActionSpace(session,&space,&aim_spaces[i])))return false;}
+#ifdef TCVR_STEAM_FRAME
+    space.action=grip_pose_action;
+    for(int i=0;i<HAND_COUNT;i++){space.subactionPath=hand_paths[i];if(!XR(xrCreateActionSpace(session,&space,&grip_pose_spaces[i])))return false;}
+#endif
     return true;
 }
 static void update_frame_profile(void){
 #ifdef TCVR_STEAM_FRAME
-    if(!frame_profile_supported||!session)return;
+    if(!session)return;
     XrInteractionProfileState current={XR_TYPE_INTERACTION_PROFILE_STATE};
     if(XR(xrGetCurrentInteractionProfile(session,hand_paths[RIGHT_HAND],&current))){
-        bool frame=current.interactionProfile==frame_profile_path;
+        active_profile_path=current.interactionProfile;
+        bool frame=frame_profile_supported&&current.interactionProfile==frame_profile_path;
         if(frame!=frame_profile_active){
             frame_profile_active=frame;reset_input_edges();
             fprintf(stderr,"[vr] controller profile %s\n",frame?"Steam Frame":"fallback");
@@ -543,8 +569,108 @@ static bool events(void){
 #endif
     return !quit&&(result==XR_EVENT_UNAVAILABLE||XR(result));
 }
+#ifdef TCVR_STEAM_FRAME
+static bool frame_diag_poll_pose(XrAction action_handle,XrSpace space_handle,XrPath hand,
+                                 XrTime time,FramePoseSample *sample,XrSpaceLocation *location_out){
+    memset(sample,0,sizeof *sample);sample->action_queried=true;
+    sample->action_result=XR_ERROR_RUNTIME_FAILURE;
+    sample->locate_result=XR_ERROR_RUNTIME_FAILURE;
+    sample->location=(XrSpaceLocation){XR_TYPE_SPACE_LOCATION};
+    XrActionStateGetInfo get={XR_TYPE_ACTION_STATE_GET_INFO};get.action=action_handle;get.subactionPath=hand;
+    XrActionStatePose pose={XR_TYPE_ACTION_STATE_POSE};
+    sample->action_result=xrGetActionStatePose(session,&get,&pose);
+    if(!XR_SUCCEEDED(sample->action_result))return false;
+    sample->action_active=pose.isActive;
+    if(!pose.isActive)return false;
+    sample->locate_attempted=true;
+    XrSpaceLocation location={XR_TYPE_SPACE_LOCATION};
+    XrSpaceLocationFlags required=XR_SPACE_LOCATION_POSITION_VALID_BIT|XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
+    sample->locate_result=xrLocateSpace(space_handle,local_space,time,&location);
+    sample->location=location;
+    if(location_out)*location_out=location;
+    return XR_SUCCEEDED(sample->locate_result)&&(location.locationFlags&required)==required;
+}
+static void frame_diag_print_pose(FILE *out,const FramePoseSample *sample){
+    if(!sample->action_queried){fputs("unavailable(not-polled)",out);return;}
+    if(!XR_SUCCEEDED(sample->action_result)){fprintf(out,"unavailable(action-error=%d)",sample->action_result);return;}
+    if(!sample->action_active){fputs("inactive",out);return;}
+    if(!sample->locate_attempted){fputs("unavailable(not-located)",out);return;}
+    if(!XR_SUCCEEDED(sample->locate_result)){fprintf(out,"unavailable(locate-error=%d)",sample->locate_result);return;}
+    const XrSpaceLocation *location=&sample->location;
+    fprintf(out,"flags=0x%llx,pos=",(unsigned long long)location->locationFlags);
+    if(location->locationFlags&XR_SPACE_LOCATION_POSITION_VALID_BIT)
+        fprintf(out,"(%.3f,%.3f,%.3f)",location->pose.position.x,location->pose.position.y,location->pose.position.z);
+    else fputs("invalid",out);
+    fputs(",quat=",out);
+    if(location->locationFlags&XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)
+        fprintf(out,"(%.3f,%.3f,%.3f,%.3f)",location->pose.orientation.x,location->pose.orientation.y,
+                location->pose.orientation.z,location->pose.orientation.w);
+    else fputs("invalid",out);
+}
+static const char *frame_diag_pose_field_problem(const FramePoseSample *sample,XrSpaceLocationFlags flag){
+    if(!sample->action_queried)return "not-polled";
+    if(!XR_SUCCEEDED(sample->action_result))return "action-error";
+    if(!sample->action_active)return "inactive";
+    if(!sample->locate_attempted)return "not-located";
+    if(!XR_SUCCEEDED(sample->locate_result))return "locate-error";
+    if(!(sample->location.locationFlags&flag))
+        return flag==XR_SPACE_LOCATION_POSITION_VALID_BIT?"position-invalid":"orientation-invalid";
+    return NULL;
+}
+static void frame_diag_print_derived_unavailable(FILE *out,const FramePoseSample *aim,const FramePoseSample *grip,
+                                                  XrSpaceLocationFlags flag){
+    const char *aim_problem=frame_diag_pose_field_problem(aim,flag),*grip_problem=frame_diag_pose_field_problem(grip,flag);
+    fputs("unavailable(",out);bool separator=false;
+    if(aim_problem){fprintf(out,"aim:%s",aim_problem);separator=true;}
+    if(grip_problem){fprintf(out,"%sgrip:%s",separator?",":"",grip_problem);}
+    fputc(')',out);
+}
+static void frame_diag_report_poses(FILE *out,XrTime time){
+    if(!frame_diag.pose_report||!focused||!frame_pose_report.samples_ready)return;
+    const char *profile=active_profile_path==frame_profile_path?"steam_frame":
+        active_profile_path==touch_profile_path?"touch_fallback":"unavailable";
+    for(int hand=0;hand<HAND_COUNT;hand++){
+        const FramePoseSample *aim=&frame_pose_report.aim[hand],*grip=&frame_pose_report.grip[hand];
+        if(!aim->action_active&&!grip->action_active)continue;
+        if(frame_pose_report.next_log[hand]&&time<frame_pose_report.next_log[hand])continue;
+        frame_pose_report.next_log[hand]=time+1000000000LL;
+        fprintf(out,"[vr-pose] t=%lld profile=%s hand=%s weapon_hand=%s pitch=%ddeg render_source=%s aim{",
+                (long long)time,profile,hand==LEFT_HAND?"left":"right",weapon_hand()==LEFT_HAND?"left":"right",
+                options.gun_pitch,frame_diag.synthetic_hands?"synthetic_hands":"live");
+        frame_diag_print_pose(out,aim);fputs("} grip{",out);frame_diag_print_pose(out,grip);fputs("} grip_to_aim_m=",out);
+        XrSpaceLocationFlags position=XR_SPACE_LOCATION_POSITION_VALID_BIT;
+        if(!frame_diag_pose_field_problem(aim,position)&&!frame_diag_pose_field_problem(grip,position))
+            fprintf(out,"(%.3f,%.3f,%.3f)",aim->location.pose.position.x-grip->location.pose.position.x,
+                    aim->location.pose.position.y-grip->location.pose.position.y,
+                    aim->location.pose.position.z-grip->location.pose.position.z);
+        else frame_diag_print_derived_unavailable(out,aim,grip,position);
+        fputs(" grip_to_aim=",out);
+        XrSpaceLocationFlags orientation=XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
+        if(!frame_diag_pose_field_problem(aim,orientation)&&!frame_diag_pose_field_problem(grip,orientation)){
+            Q4 aim_q=quat(aim->location.pose.orientation),grip_q=quat(grip->location.pose.orientation);
+            Q4 delta=product(conjugate(grip_q),aim_q);
+            float vector_length=sqrtf(delta.x*delta.x+delta.y*delta.y+delta.z*delta.z);
+            float degrees=2.f*atan2f(vector_length,fabsf(delta.w))*(180.f/3.14159265358979323846f);
+            fprintf(out,"%.2fdeg,quat=(%.3f,%.3f,%.3f,%.3f)",degrees,delta.x,delta.y,delta.z,delta.w);
+        }else frame_diag_print_derived_unavailable(out,aim,grip,orientation);
+        fputs(" gun=",out);
+        if(!gun_tracked)fputs("untracked",out);
+        else{
+            V3 direction=rotate(gun_rotation,v3(0,0,-1));
+            fprintf(out,"pos=(%.3f,%.3f,%.3f),quat=(%.3f,%.3f,%.3f,%.3f),muzzle=(%.3f,%.3f,%.3f),direction=(%.3f,%.3f,%.3f),target_%s=(%.3f,%.3f,%.3f)",
+                    gun_position.x,gun_position.y,gun_position.z,gun_rotation.x,gun_rotation.y,gun_rotation.z,gun_rotation.w,
+                    gun_origin.x,gun_origin.y,gun_origin.z,direction.x,direction.y,direction.z,
+                    aim_valid?"hit":"fallback",gun_hit.x,gun_hit.y,gun_hit.z);
+        }
+        fputc('\n',out);
+    }
+}
+#endif
 static void sync_input(XrTime time,bool head_tracked,float head_y){
     trigger=pedal=0;aim_valid=gun_tracked=false;
+#ifdef TCVR_STEAM_FRAME
+    frame_pose_report.samples_ready=false;
+#endif
     if(!focused){reset_input_edges();return;}
     XrActiveActionSet aset={action_set,XR_NULL_PATH};XrActionsSyncInfo sync={XR_TYPE_ACTIONS_SYNC_INFO};sync.countActiveActionSets=1;sync.activeActionSets=&aset;
     if(!XR(xrSyncActions(session,&sync))){reset_input_edges();return;}
@@ -609,10 +735,17 @@ static void sync_input(XrTime time,bool head_tracked,float head_y){
     XrActionStateFloat fire[HAND_COUNT];
     XrSpaceLocationFlags required=XR_SPACE_LOCATION_POSITION_VALID_BIT|XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
     for(int h=0;h<HAND_COUNT;h++){
+        locations[h]=(XrSpaceLocation){XR_TYPE_SPACE_LOCATION};
+#ifdef TCVR_STEAM_FRAME
+        tracked[h]=frame_diag_poll_pose(aim_action,aim_spaces[h],hand_paths[h],time,&frame_pose_report.aim[h],&locations[h]);
+        if(frame_diag.pose_report)
+            (void)frame_diag_poll_pose(grip_pose_action,grip_pose_spaces[h],hand_paths[h],time,&frame_pose_report.grip[h],NULL);
+#else
         XrActionStateGetInfo get={XR_TYPE_ACTION_STATE_GET_INFO};get.action=aim_action;get.subactionPath=hand_paths[h];
-        XrActionStatePose pose={XR_TYPE_ACTION_STATE_POSE};locations[h]=(XrSpaceLocation){XR_TYPE_SPACE_LOCATION};
+        XrActionStatePose pose={XR_TYPE_ACTION_STATE_POSE};
         tracked[h]=XR_SUCCEEDED(xrGetActionStatePose(session,&get,&pose))&&pose.isActive&&
             XR_SUCCEEDED(xrLocateSpace(aim_spaces[h],local_space,time,&locations[h]))&&(locations[h].locationFlags&required)==required;
+#endif
         available[h]=axis_state(trigger_action,hand_paths[h],&fire[h]);
         FireTrigger *button=&fire_triggers[h];
         if(paused||!tracked[h]||!available[h]){*button=(FireTrigger){0};continue;}
@@ -643,6 +776,9 @@ static void sync_input(XrTime time,bool head_tracked,float head_y){
         if(!aim_valid)gun_hit=add(gun_origin,mul(dir,2.5f));
         if(!paused&&fire_triggers[hand].pressed)trigger=1;
     }else shot_pending=shot_needs_release=false;
+#ifdef TCVR_STEAM_FRAME
+    frame_pose_report.samples_ready=frame_diag.pose_report;
+#endif
 }
 
 /* Input tests compile the real action and polling code without a window/runtime. */
@@ -927,6 +1063,7 @@ bool ss22_host_frame(void){
         if(diagnostic_force&&!focused)frame_diag_input();
         else sync_input(frame.predictedDisplayTime,head_tracked,(views[0].pose.position.y+views[1].pose.position.y)*.5f);
         frame_diag_hands();
+        frame_diag_report_poses(stderr,frame.predictedDisplayTime);
 #else
         sync_input(frame.predictedDisplayTime,head_tracked,(views[0].pose.position.y+views[1].pose.position.y)*.5f);
 #endif
@@ -1099,7 +1236,11 @@ void ss22_host_close(void){
     active=false;eng_audio_close();
     if(context&&gpu_ready){qui_shutdown();qgun_shutdown();qgl_shutdown();}
     for(int i=0;i<2;i++){if(context&&gpu_ready&&eyes[i].fb)glDeleteFramebuffers(eyes[i].n,eyes[i].fb);if(context&&gpu_ready)glDeleteRenderbuffers(1,&eyes[i].depth);if(eyes[i].chain)xrDestroySwapchain(eyes[i].chain);free(eyes[i].images);free(eyes[i].fb);memset(&eyes[i],0,sizeof eyes[i]);}
-    for(int i=0;i<HAND_COUNT;i++){if(aim_spaces[i])xrDestroySpace(aim_spaces[i]);aim_spaces[i]=0;}
+    for(int i=0;i<HAND_COUNT;i++){if(aim_spaces[i])xrDestroySpace(aim_spaces[i]);aim_spaces[i]=0;
+#ifdef TCVR_STEAM_FRAME
+        if(grip_pose_spaces[i])xrDestroySpace(grip_pose_spaces[i]);grip_pose_spaces[i]=0;
+#endif
+    }
     if(local_space)xrDestroySpace(local_space);
     if(session)xrDestroySession(session);if(action_set)xrDestroyActionSet(action_set);if(instance)xrDestroyInstance(instance);
     local_space=0;session=0;action_set=0;instance=0;running=false;
