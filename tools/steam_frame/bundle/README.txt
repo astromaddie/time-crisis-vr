@@ -53,9 +53,9 @@ Wearer-assisted validation has confirmed the Valve Frame profile, 2160×2160 per
 120 Hz, settings reload and subjectively good smoothness. The wearer accepted the
 world-effect depth correction on build 3e60774. The wearer also confirmed audio,
 grip cover/reload and Menu pause/resume.
-A matched synthetic yaw90 pair is inspected. Both hands, physical ducking,
-View gestures, yaw180 and multiview still need validation. Matched quiet-scene
-stereo captures are inspected.
+Matched quiet-scene, yaw90, rear-facing yaw180 and multiview pairs are inspected.
+Yaw180 is black and provides no binocular gameplay evidence. Both hands, physical
+ducking, View gestures and full comfort assessment remain pending.
 See evidence/ for the recorded build/package/device verification results.
 
 DISPLAY AND CURRENT ACCEPTANCE
@@ -71,7 +71,12 @@ later matched 2160-square quiet-scene pairs verify the HUD and calibrated shot m
 On build 3e60774, the wearer reported that the explosions now look great. World
 billboards use the game-authored depth estimate, while screen flashes remain overlays.
 Audio, grip cover/reload and Menu pause/resume were also confirmed by the wearer.
-The matched yaw90 pair is inspected; yaw180 and multiview remain queued.
+Yaw90 shows side-facing scenery; both rear-facing yaw180 eyes are entirely black.
+The original camera-visible scene does not provide a complete rear environment.
+Multiview closely matches the separate-eye quiet scene: fewer than 0.011% of pixels
+differ in each eye. Configuration/init/fallback evidence and the source branch
+support multiview selection, without per-frame telemetry. This is visual parity,
+not a performance or comfort comparison. Separate eyes remain the default.
 Matched active-flame images, both weapon hands, physical ducking,
 View gestures and full comfort assessment remain pending.
 
