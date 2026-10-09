@@ -90,17 +90,67 @@ int main(void){
     for(int i=0;i<4;i++){q.rv[i].sx16=(i==1||i==2?640:0)*16;q.rv[i].sy16=(i>=2?480:0)*16;}
     qvr_scene_begin();for(int n=0;n<230;n++)qvr_scene_quad(&q);qvr_sprites_prepare(&mark,1);
     assert(qvr_sprite_corners(&mark,0,corners));near(corners[0][2],-29.4f);
+    /* The game's world-sprite routines author layer 1 + camera Z. Test the
+     * production prepare/corners path in both build modes, with scenery at a
+     * different depth so a surface-snapping implementation cannot pass. */
+    sprite_item world={.x0=196,.y0=279,.w=61,.h=71,.idx=8,.tile=10131,.z=0x228d13};
+    sprite_item original_world=world;
+    qvr_scene_begin();qvr_scene_quad(&q);qvr_sprites_prepare(&world,1);
+#ifdef TCVR_STEAM_FRAME
+    assert(qvr_sprite_corners(&world,0,corners));near(corners[0][2],-167.187f);
+    assert(memcmp(&world,&original_world,sizeof world)==0); /* painter key/bounds retained */
+    assert(qvr_flat_camera(&cx,&cy,&focal));
+    const int corner_xy[4][2]={{196,279},{257,279},{257,350},{196,350}};
+    for(int i=0;i<4;i++){
+        near(cx+focal*corners[i][0]/-corners[i][2],corner_xy[i][0]);
+        near(cy-focal*corners[i][1]/-corners[i][2],corner_xy[i][1]);near(corners[i][3],1);
+    }
+    /* Its stereo disparity follows world depth, not the inherited 2.5m HUD. */
+    float left_px=cx+focal*(corners[0][0]+.032f)/-corners[0][2];
+    float right_px=cx+focal*(corners[0][0]-.032f)/-corners[0][2];
+    near(left_px-right_px,focal*.064f/167.187f);
+    assert(left_px-right_px<focal*.064f/2.5f);
+    /* World placement must not replace the polygon-only aim surface. */
+    assert(qvr_aim(v3(0,0,0),v3(0,0,-1),&x,&y,&hit));near(hit.z,-30);
+    qvr_units_per_meter=2000;qvr_sprites_prepare(&world,1);
+    assert(qvr_sprite_corners(&world,0,corners));near(corners[0][2],-83.5935f);
+    const float bad_scales[]={0,-1,NAN,INFINITY};
+    for(unsigned i=0;i<sizeof bad_scales/sizeof bad_scales[0];i++){
+        qvr_units_per_meter=bad_scales[i];qvr_sprites_prepare(&world,1);
+        assert(!qvr_sprite_corners(&world,0,corners));
+    }
+    qvr_units_per_meter=1000;
+    /* Near HUD values, other priority bands and saturated keys must retain
+     * the flat path, even when their artwork or screen rectangle matches. */
+    const uint32_t flat_keys[]={0,1,0x10,0x200000,0x200010,0x3fffff,0x028d13,0x428d13,0xe28d13};
+    for(unsigned i=0;i<sizeof flat_keys/sizeof flat_keys[0];i++){
+        world.z=flat_keys[i];qvr_sprites_prepare(&world,1);
+        assert(!qvr_sprite_corners(&world,0,corners));
+    }
+    world=original_world;qvr_sprites_prepare(&world,1);
+    sprite_item changed=world;changed.z++;assert(!qvr_sprite_corners(&changed,0,corners));
+    assert(!qvr_sprite_corners(&world,-1,corners));assert(!qvr_sprite_corners(&world,1,corners));
+    qvr_flat_view=1;qvr_sprites_prepare(&world,1);assert(!qvr_sprite_corners(&world,0,corners));qvr_flat_view=0;
+    /* A retained gameplay camera must not convert title/menu sprites when no
+     * reconstructed world is present, including direct-screen polygon scenes. */
+    qvr_scene_begin();qvr_sprites_prepare(&world,1);assert(!qvr_sprite_corners(&world,0,corners));
+    q.direct=1;qvr_scene_quad(&q);qvr_sprites_prepare(&world,1);assert(!qvr_sprite_corners(&world,0,corners));q.direct=0;
+#else
+    assert(!qvr_sprite_corners(&world,0,corners));
+    assert(memcmp(&world,&original_world,sizeof world)==0);
+#endif
 #ifdef TCVR_STEAM_FRAME
     /* Exercise the same cached sprite and reconstructed polygon data consumed
      * by ss22_draw, then gate its one-shot report on the paired dump tick. */
     geo_quad far=q,near_quad=q;far.zsort=0x005678;far.order=77;near_quad.zsort=0x001234;near_quad.order=88;
     for(int i=0;i<4;i++){far.rv[i].sx16=(i==1||i==2?640:0)*16;far.rv[i].sy16=(i>=2?480:0)*16;far.rv[i].z=30000;near_quad.rv[i]=far.rv[i];near_quad.rv[i].z=20000;}
     qvr_scene_begin();qvr_scene_quad(&far);qvr_scene_quad(&near_quad);
-    sprite_item report_items[2]={
+    sprite_item report_items[3]={
         {.x0=350,.y0=180,.w=33,.h=33,.idx=17,.prioverchar=1,.tile=QVR_IMPACT_FIRST,.z=0},
-        {.x0=100,.y0=120,.w=40,.h=50,.idx=42,.prioverchar=0,.tile=100,.z=0x400123}
+        {.x0=100,.y0=120,.w=40,.h=50,.idx=42,.prioverchar=0,.tile=100,.z=0x400123},
+        world
     };
-    qvr_sprites_prepare(report_items,2);unsigned report_frame=qvr_scene_frame_number();
+    qvr_sprites_prepare(report_items,3);unsigned report_frame=qvr_scene_frame_number();
     float report_corners[4][4];assert(qvr_sprite_corners(&report_items[0],0,report_corners));assert(!qvr_sprite_corners(&report_items[1],1,report_corners));
     FILE *report=tmpfile();assert(report);
     assert(!qvr_sprite_report_emit(report,600,true)); /* static/default state is off */
@@ -111,12 +161,13 @@ int main(void){
     assert(!qvr_sprite_report_emit(report,599,false));
     assert(qvr_sprite_report_emit(report,600,true));assert(!qvr_sprite_report_emit(report,601,true));
     char report_text[8192];assert(read_text(report,report_text,sizeof report_text)>0);fclose(report);
-    char expected_header[160];snprintf(expected_header,sizeof expected_header,"[vr-sprite] snapshot scene_frame=%u simulation_tick=600 active_count=2 reported_count=2 truncated=0",report_frame);
+    char expected_header[160];snprintf(expected_header,sizeof expected_header,"[vr-sprite] snapshot scene_frame=%u simulation_tick=600 active_count=3 reported_count=3 truncated=0",report_frame);
     assert(strstr(report_text,expected_header));
     assert(strstr(report_text,"mixer_valid=1 bg=112233 fog_rgb=445566 poly_fade_enabled=1 poly_fade_rgb=708090 screen_fade_active=1 screen_fade_rgb=FFFF00 screen_fade_factor=0x80 mixer_flags=0x01"));
     assert(strstr(report_text,"item=0 idx=17 tile=9368 z=0x000000 layer=0 sort_depth=0 bounds=(350,180,33,33) prioverchar=1 classification=impact_projected impact_depth_m=19.6000"));
     assert(strstr(report_text,"nearest_world_depth_m=20.0000 world_zsort=0x001234 world_quad_order=88"));
     assert(strstr(report_text,"item=1 idx=42 tile=100 z=0x400123 layer=2 sort_depth=291 bounds=(100,120,40,50) prioverchar=0 classification=flat_2d"));
+    assert(strstr(report_text,"classification=world_authored_depth impact_depth_m=0.0000 projected_depth_m=167.1870"));
 
     /* A stored yellow fade color is not active unless the mixer gate is on. */
     qvr_sprite_report_arm(true);qvr_scene_begin();qvr_scene_quad(&near_quad);
@@ -142,5 +193,5 @@ int main(void){
     unsigned report_lines=0;for(char *cursor=bounded_text;(cursor=strstr(cursor,"[vr-sprite]"));cursor+=11)report_lines++;
     assert(report_lines==1025);free(bounded_text);
 #endif
-    puts("PASS: VR timing/math, supported refresh selection, camera-aligned HUD/aim, surface shot marks, bounded sprite/mixer report, nearest hit, grid overflow and unchanged desktop projection");return 0;
+    puts("PASS: VR timing/math, refresh selection, HUD/aim, surface shot marks, Frame world-sprite depth and exclusions, bounded sprite/mixer report, nearest hit, grid overflow and unchanged desktop projection");return 0;
 }

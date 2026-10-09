@@ -13,7 +13,8 @@ extern float qvr_units_per_meter;
 void qvr_vertex(const geo_quad *q,float x,float y,float z,float out[4]);
 void qvr_scene_begin(void);
 void qvr_scene_quad(const geo_quad *q);
-/* Time Crisis shot-mark animation; other HUD art stays flat. */
+/* Time Crisis shot-mark animation; other HUD art stays flat. Frame additionally
+ * reconstructs layer-1 world billboards from the game's authored depth. */
 #define QVR_IMPACT_FIRST 9368
 #define QVR_IMPACT_LAST 9373
 void qvr_sprites_prepare(const sprite_item *items,int n);

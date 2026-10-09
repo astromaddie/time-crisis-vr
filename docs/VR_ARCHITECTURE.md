@@ -15,6 +15,16 @@ For unattended Frame diagnostics, place a one-shot `vrdiag.once` text file in th
 
 For deterministic replay of a saved train session, copy it to `vrdiag-replay.inputs` and create the empty marker `vrdiag-replay.once` in the persistent root. Startup validates the `SS22REC 1 TC` header and full EEPROM image before consuming the marker or selecting `--replay`. Missing or malformed input stops startup while preserving the marker, replay source, and latest/previous session recordings. A valid replay skips input-recording rotation and creation, and does not initialize external EEPROM persistence; the recording remains authoritative for arcade inputs and gun coordinates. Later `vrdiag.once` settings still control rendering and the target dump tick. Neither the marker nor replay recording is included in the APK or delivery bundle.
 
+## World-effect sprite placement
+
+On Frame, `quest_scene.c` reconstructs ordinary layer-1 sprites at their authored low-21-bit depth divided by `qvr_units_per_meter`. The game's TS2 Ver.B routines at `0x10E12` and `0x10EDE` subtract the camera position and rotate the actor; `0x10E48`/`0x10F12` add `0x200000` to positive camera Z and store it at actor offset `0x8C`. The VICS emitter copies this field at `0x10C26`/`0x10C2A`. These paths are visible in the pinned upstream `timecris/gen/tc_lifted_00.c`; no translated game source or ROM inputs are added to this repository.
+
+This is an authored depth estimate. Some callers subsequently bias the value for painter priority (for example `0x5BF4` subtracts `0x1800`); it is not an exact physical position for every effect, and polygon sort keys cannot be inverted to obtain one. The correction changes only billboard vertices, preserving the game's shared sprite/polygon draw order, pixel colours, transparency and screen fades. It does not add depth testing or put sprites into aiming/collision geometry. Each billboard retains its original rectangle when viewed from the arcade camera; both eyes and head motion then use the world transform.
+
+The rule requires reconstructed world geometry in the current scene and a finite positive world scale. Low depths through `0x10` (the upstream Time Crisis HUD cutoff), other priority layers, and the saturated `0x1FFFFF` endpoint keep the flat path. Scenes without world geometry, the flat desktop view and the Quest build keep their previous behavior. Shot marks retain their existing nearest-surface projection. Preparation adds constant work per cached sprite and no new polygon scans, grid construction or allocations. Sprite reports distinguish `world_authored_depth` and expose `projected_depth_m`; `impact_depth_m` remains specific to shot marks.
+
+Host production-path checks cover both build flags, world scale, off-centre rectangle preservation, depth-dependent stereo disparity, stale cache rejection, HUD/layer/title exclusions, unchanged polygon aiming and screen-fade reporting. Matched active-flame eye captures and worn acceptance are still required; quiet train captures and a full-screen yellow flash do not establish this correction's visual quality.
+
 ## Build and acceptance
 
 Build on the configured macOS host with:

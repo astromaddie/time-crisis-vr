@@ -83,6 +83,24 @@ void qvr_scene_quad(const geo_quad *q){
     }
 }
 static bool impact(const sprite_item *it){return it->tile>=QVR_IMPACT_FIRST&&it->tile<=QVR_IMPACT_LAST&&it->z==0;}
+#ifdef TCVR_STEAM_FRAME
+/* TS2 Ver.B 0x10E12/0x10EDE project a world actor using camera Z, then
+ * 0x10E48/0x10F12 add 0x200000 and store it at actor+0x8C. The VICS emitter
+ * (0x10C26/0x10C2A) copies that value to attr[0]. Only that world layer is
+ * reconstructed here; other priority layers do not establish camera depth.
+ * Time Crisis's upstream HUD configuration reserves low depths <= 0x10.
+ * Some effects bias this value for painter order, so it remains an authored
+ * depth estimate, not a collision surface or a polygon zsort inverse. */
+static bool world_sprite(const sprite_item *it){
+    uint32_t depth=it->z&0x1fffffu;
+    return (it->z>>21)==1&&depth>0x10u&&depth<0x1fffffu;
+}
+static float world_sprite_depth(const sprite_item *it){
+    if(qvr_flat_view||!count||!world_sprite(it)||!isfinite(qvr_units_per_meter)||qvr_units_per_meter<=0)return 0;
+    float depth=(it->z&0x1fffffu)/qvr_units_per_meter;
+    return isfinite(depth)&&depth>0?depth:0;
+}
+#endif
 static void build_grid(void){
     for(int i=0;i<GRID_W*GRID_H;i++)grid[i]=-1;
     link_count=0;grid_overflow=false;
@@ -149,6 +167,9 @@ void qvr_sprites_prepare(const sprite_item *items,int n){
     bool grid_built=false;
     for(int i=0;i<sprite_count;i++){
         sprites[i].item=items[i];sprites[i].depth=0;
+#ifdef TCVR_STEAM_FRAME
+        sprites[i].depth=world_sprite_depth(&items[i]);
+#endif
         if(impact(&items[i])){
             if(!qvr_flat_view){
                 if(!grid_built){build_grid();grid_built=true;}
@@ -177,6 +198,10 @@ void qvr_scene_report_mixer(bool valid,const uint8_t background[3],const uint8_t
     scene_mixer_snapshot.mixer_flags=mixer_flags;
 }
 static const char *sprite_classification(const sprite_item *item,float projected_depth){
+    if(world_sprite(item)){
+        if(qvr_flat_view)return "world_candidate_flat_view";
+        return projected_depth>0?"world_authored_depth":"world_candidate_flat_fallback";
+    }
     if(!impact(item))return "flat_2d";
     if(qvr_flat_view)return "impact_candidate_flat_view";
     return projected_depth>0?"impact_projected":"impact_candidate_flat_fallback";
@@ -198,7 +223,8 @@ bool qvr_sprite_report_emit(FILE *out,uint64_t simulation_tick,bool ready){
         bool has_world=surface_hit(item->x0+item->w*.5f,item->y0+item->h*.5f,&world_depth,&world_sort,&world_order);
         fprintf(out,"[vr-sprite] item=%d idx=%d tile=%d z=0x%06X layer=%u sort_depth=%u bounds=(%d,%d,%d,%d) prioverchar=%d classification=%s impact_depth_m=%.4f ",
             i,item->idx,item->tile,(unsigned)item->z&0xffffffu,(unsigned)item->z>>21,(unsigned)item->z&0x1fffffu,item->x0,item->y0,item->w,item->h,item->prioverchar,
-            sprite_classification(item,sprites[i].depth),sprites[i].depth);
+            sprite_classification(item,sprites[i].depth),impact(item)?sprites[i].depth:0);
+        fprintf(out,"projected_depth_m=%.4f ",sprites[i].depth);
         if(has_world)fprintf(out,"nearest_world_depth_m=%.4f world_zsort=0x%06X world_quad_order=%d\n",world_depth,world_sort,world_order);
         else fprintf(out,"nearest_world_depth_m=none world_zsort=none world_quad_order=none\n");
     }
