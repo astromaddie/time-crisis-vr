@@ -84,10 +84,13 @@ Sustained 120 FPS is not established. The latest 3e60774 wear run produced 68 fo
 240-frame reports at 120 Hz/2160-square eyes, with no image or pose capture. Window
 means were 4.88–7.25 ms; the largest sample was 88.16 ms, and 3,520 of 16,320 frames
 exceeded the render-wall budget. These counters are not compositor dropped frames.
-A diagnostic self-exit
-produced SIGSEGV after XR cleanup with no recovered stack. Normal Steam quit ended with
-status 137, which does not prove clean native shutdown. The grip-pivot diagnostic is
-experimental and off by default.
+A bounded 60-second diagnostic self-exit reproduced SIGSEGV in Android UI surface
+handling under GDB: RefBase::incStrong -> SurfaceControl.Transaction.setWindowCrop
+during ViewRootImpl.performTraversals, accessing address 0x4. No app-code frame appears
+in the fault stack; app debug symbols were not loaded, so cause remains unresolved.
+Normal Steam quit ended with status 137, which does not prove clean native shutdown.
+Data was restored and diagnostics/debugger removed before releasing the booking.
+Only a curated fault summary is delivered. The grip-pivot diagnostic remains off.
 
 For replaying the saved train session, place the input at
 `/sdcard/Documents/TimeCrisisVR/vrdiag-replay.inputs` and create
