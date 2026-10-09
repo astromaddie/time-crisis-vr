@@ -26,17 +26,20 @@ Source, native build, Java packaging, APK signature/alignment, manifest, ABI, an
 
 ## Delivery and current acceptance
 
-The ROM-free installation bundle contains `install.sh`, `install.py`, `README.txt`, `payload/TimeCrisisVR.apk`, build metadata, evidence, and `SHA256SUMS`. Its installer verifies every delivered file and all 31 supplied chip hashes, takes a byte-for-byte and permission-preserving backup of existing title/data files, claims the shared Frame booking, and registers the persistent Steam title `TimeCrisisVR`. Launch through Steam for controller input. The checked-in installer templates are under `tools/steam_frame/bundle`; they run from the assembled delivery bundle.
+The ROM-free installation bundle contains `install.sh`, `install.py`, `README.txt`, `payload/TimeCrisisVR.apk`, build metadata, evidence, and `SHA256SUMS`. Its installer verifies every delivered file and all 31 supplied chip hashes, takes a byte-for-byte and permission-preserving backup of existing title/data files, claims the shared Frame booking, and registers the persistent title ID `TimeCrisisVR`, displayed as **Devkit Game: TimeCrisisVR**. Launch that title through Steam for controller input. The checked-in installer templates are under `tools/steam_frame/bundle`; they run from the assembled delivery bundle.
 
 Host regressions cover production Quest/Frame/Touch input, View timing and focus rearm, timing/projection/aim math, options persistence, color negotiation, ROM import and persistent-storage failures, patch reproducibility, HUD capture orientation, full native build modes, and installer integrity/backup behavior. The canonical upstream checkout must remain clean before the macOS build generates its disposable source view. Windows/ANGLE render tests were unavailable on the macOS host; device rendering and worn acceptance remain separate checks.
 
 | Feature | Current device status |
 |---|---|
-| Loader/session and persistent ROM import | not started |
-| Separate-eye rendering and color probe | not started |
+| Steam registration, loader/session | verified unattended through Steam and Lepton |
+| Persistent ROM import | verified unattended: all 31 chips retained through container replacement and repeated launches |
+| Separate-eye color probe | verified unattended: left red/right blue, inspected 2160×2160 captures |
+| Separate-eye game rendering | opening cutscene captured in both eyes; active Stage 1 and yaw coverage pending |
 | Multiview comparison | not started |
-| HUD and audio output | not started |
-| Repeated timing measurements and Steam data retention | not started |
-| Physical controls, aim, ducking, recenter and comfort | not started |
+| HUD and audio output | cutscene text visible; 48 kHz stereo initialized; full HUD and audible quality pending |
+| Controller profile and gun fit | live log identifies Valve Frame profile and gun pitch 0; wearer reports barrel points too low; live pose/pitch comparison pending |
+| Repeated timing measurements and settings retention | clean gameplay windows and saved-settings relaunch check pending |
+| Physical controls, ducking, recenter and comfort | production-path host tests pass; full worn acceptance pending |
 
-The supplied bundle README includes the 15-minute Stage 1 wear checklist. Controls, comfort, audio perception and visuals require that wear session before acceptance. No 120 Hz recommendation is made without a measured compositor period and repeated device results.
+The supplied bundle README includes the 15-minute Stage 1 wear checklist. Controls, comfort, audio perception and visuals require that wear session before acceptance. Off-head diagnostics measured `predictedDisplayPeriod=13.89 ms` (72 Hz); compositor logs selected the same rate despite a global 120 Hz preference and no Time Crisis per-title entry. A wearer-assisted 120 Hz test is requested and pending. No 120 Hz recommendation is made without a measured compositor period and repeated device results. Image-dump runs include readback/file I/O and do not count as clean performance windows.

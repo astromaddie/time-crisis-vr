@@ -11,7 +11,7 @@ INSTALL
    ./install.sh --verify-only
    ./install.sh --rom "$HOME/Downloads/timecris.zip"
    For a different address: add --host steamos@<address>.
-4. Launch TimeCrisisVR from the Steam library.
+4. Launch Devkit Game: TimeCrisisVR from the Steam library.
 
 The installer checks the bundle hashes and all 31 required ROM chip hashes,
 backs up any existing TimeCrisisVR data and title with a verified manifest,
@@ -26,11 +26,11 @@ Pre-install backups: /home/steamos/Documents/TimeCrisisVR-backups/<UTC timestamp
 CONTROLS
 Either trigger: choose its weapon hand and fire/start/confirm.
 Either grip: hold to leave cover; release both to hide/reload.
-A: insert three credits. B: toggle laser. These stay fixed for either weapon hand.
+Right A: insert three credits. Right B: toggle laser. These stay fixed for either weapon hand.
 Right Menu: pause/options or resume.
 Left View: short press goes back; hold 1 second recenters;
 hold 3 seconds recenters and calibrates upright head height.
-In options only: X switches grip/physical-duck cover; right stick up/down adjusts
+In options only: right X switches grip/physical-duck cover; right stick up/down adjusts
 gun angle, right stick click changes default hand, left stick click resets angle.
 
 15-MINUTE WEAR CHECK
@@ -51,3 +51,13 @@ Report: build ID from build-info.json, scene, aim alignment, world scale,
 HUD legibility, cover behavior, controls, comfort, audio and any crash.
 Visuals, controls and comfort remain headset-unverified until this wear check.
 See evidence/ for the recorded build/package/device verification results.
+
+DISPLAY AND CURRENT ACCEPTANCE
+The default renderer uses separate eye passes with a 2160-pixel maximum per eye.
+frame-display.cfg can set eye_resolution=512..2160 and multiview=1 for comparison.
+The Frame build follows the runtime cadence; refresh is controlled by SteamVR.
+Startup, ROM persistence, eye-colour probe and opening-cutscene captures are verified
+unattended. Active Stage 1, multiview and repeated gameplay timing remain pending.
+The wearer reported that the barrel points too low; live pose/pitch comparison
+is pending. The optional grip-pivot diagnostic is experimental and off by default. No 120 Hz recommendation is made
+until the requested wearer-assisted measurement passes.
