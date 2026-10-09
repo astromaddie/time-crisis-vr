@@ -101,15 +101,15 @@ static struct Eye { XrSwapchain chain;uint32_t w,h,n;QSwapchainImage *images;GLu
 static double profile_parts[6],profile_thread;
 #ifdef TCVR_STEAM_FRAME
 typedef struct FrameDiagnostic {
-    bool force_render,synthetic,synthetic_hands,autostart,colorprobe,dump_eyes,dump_hud,timing;
+    bool force_render,synthetic,synthetic_hands,autostart,autostart_started,colorprobe,dump_eyes,dump_hud,timing;
     float yaw_degrees,hand_yaw_degrees;
-    unsigned probe_seconds,self_exit_seconds,dump_tick,auto_fire_ticks,auto_fire_delay_ticks;
+    unsigned probe_seconds,self_exit_seconds,dump_tick,autostart_tick,auto_fire_ticks,auto_fire_delay_ticks;
     uint64_t started_ms,probe_started_ms,input_ticks;
 } FrameDiagnostic;
 static FrameDiagnostic frame_diag;
 static void frame_diag_load(void){
     FILE *f=fopen("vrdiag.once","r");if(!f)return;
-    char line[160];int value;float degrees;
+    char line[160];int value;float degrees;bool autostart_tick_set=false;
     while(fgets(line,sizeof line,f)){
         if(sscanf(line,"force_render=%d",&value)==1)frame_diag.force_render=value==1;
         else if(sscanf(line,"synthetic=%d",&value)==1)frame_diag.synthetic=value==1;
@@ -124,13 +124,14 @@ static void frame_diag_load(void){
         else if(sscanf(line,"probe_seconds=%d",&value)==1&&value>0)frame_diag.probe_seconds=(unsigned)(value>60?60:value);
         else if(sscanf(line,"self_exit_seconds=%d",&value)==1&&value>0)frame_diag.self_exit_seconds=(unsigned)(value>120?120:value);
         else if(sscanf(line,"dump_tick=%d",&value)==1&&value>0)frame_diag.dump_tick=(unsigned)(value>1000000?1000000:value);
+        else if(sscanf(line,"autostart_tick=%d",&value)==1&&value>=0){frame_diag.autostart_tick=(unsigned)(value>1000000?1000000:value);autostart_tick_set=true;}
     }
     fclose(f);remove("vrdiag.last");rename("vrdiag.once","vrdiag.last");
     frame_diag.started_ms=SDL_GetTicks64();
     if(frame_diag.colorprobe&&!frame_diag.probe_seconds)frame_diag.probe_seconds=3;
-    if(frame_diag.autostart){coin_frames=36;frame_diag.auto_fire_delay_ticks=36;}
-    fprintf(stderr,"[vr] one-shot diagnostic loaded force_render=%d synthetic=%d hands=%d autostart=%d probe_seconds=%u dump_eyes=%d dump_hud=%d dump_tick=%u timing=%d self_exit=%u\n",
-        frame_diag.force_render,frame_diag.synthetic,frame_diag.synthetic_hands,frame_diag.autostart,frame_diag.probe_seconds,
+    if(frame_diag.autostart&&!autostart_tick_set)frame_diag.autostart_tick=600;
+    fprintf(stderr,"[vr] one-shot diagnostic loaded force_render=%d synthetic=%d hands=%d autostart=%d autostart_tick=%u probe_seconds=%u dump_eyes=%d dump_hud=%d dump_tick=%u timing=%d self_exit=%u\n",
+        frame_diag.force_render,frame_diag.synthetic,frame_diag.synthetic_hands,frame_diag.autostart,frame_diag.autostart_tick,frame_diag.probe_seconds,
         frame_diag.dump_eyes,frame_diag.dump_hud,frame_diag.dump_tick,frame_diag.timing,frame_diag.self_exit_seconds);
 }
 static void frame_diag_views(XrViewState *view_state){
@@ -1057,7 +1058,12 @@ void ss22_input_update(void){
         else if(shot_pending){fire=true;shot_pending=false;}
         if(fire)bits|=0x10;
 #ifdef TCVR_STEAM_FRAME
-        if(frame_diag.auto_fire_delay_ticks&&input_enabled){
+        if(frame_diag.autostart&&!frame_diag.autostart_started&&input_enabled&&
+           frame_diag.input_ticks>=frame_diag.autostart_tick){
+            frame_diag.autostart_started=true;coin_frames=36;frame_diag.auto_fire_delay_ticks=36;
+            fprintf(stderr,"[vr] diagnostic autostart began at simulation tick %llu\n",(unsigned long long)frame_diag.input_ticks);
+        }
+        if(frame_diag.auto_fire_delay_ticks){
             frame_diag.auto_fire_delay_ticks--;
             if(!frame_diag.auto_fire_delay_ticks)frame_diag.auto_fire_ticks=12;
         }

@@ -118,12 +118,22 @@ static void bound(XrAction a,const char *name){
     fprintf(stderr,"Missing binding: %s\n",name);abort();
 }
 #ifdef TCVR_STEAM_FRAME
+Uint64 SDL_GetTicks64(void){return 1;}
 static void frame_bound(unsigned profile,XrAction a,const char *name){
     assert(profile<3);
     for(unsigned i=0;i<profile_counts[profile];i++)if(profile_bindings[profile][i].action==a&&!strcmp(paths[profile_bindings[profile][i].binding],name))return;
     fprintf(stderr,"Missing Frame profile binding: %s\n",name);abort();
 }
 static void frame_diagnostic_regressions(void){
+    coin_frames=0;frame_diag.auto_fire_ticks=frame_diag.auto_fire_delay_ticks=0;
+    frame_diag.autostart_started=false;frame_diag.input_ticks=0;
+    FILE *config=fopen("vrdiag.once","w");assert(config);
+    fputs("force_render=1\nautostart=1\nautostart_tick=42\n",config);fclose(config);
+    frame_diag_load();assert(frame_diag.autostart_tick==42&&!coin_frames&&!frame_diag.auto_fire_delay_ticks);
+    config=fopen("vrdiag.once","w");assert(config);
+    fputs("force_render=1\nautostart=1\ndump_tick=600\n",config);fclose(config);
+    frame_diag_load();assert(frame_diag.autostart_tick==600&&!coin_frames&&!frame_diag.auto_fire_delay_ticks);
+    remove("vrdiag.last");
     uint32_t width,height;
     frame_eye_dimensions(1728,1440,2500,2500,2160,&width,&height);assert(width==2160&&height==1800);
     frame_eye_dimensions(1728,1440,2000,1700,2160,&width,&height);assert(width==2000&&height==1666);
@@ -144,20 +154,32 @@ static void frame_diagnostic_regressions(void){
         assert(fabsf(center.x)<1e-6f&&fabsf(center.y)<1e-6f&&fabsf(center.z)<1e-6f);
     }
 
-    focused=false;paused=false;frame_diag.force_render=true;frame_diag.autostart=true;
-    frame_diag.synthetic_hands=false;frame_diag.auto_fire_ticks=0;frame_diag.auto_fire_delay_ticks=36;coin_frames=36;
+    focused=false;paused=false;frame_diag.force_render=true;frame_diag.autostart=true;frame_diag.autostart_started=false;
+    frame_diag.synthetic_hands=false;frame_diag.autostart_tick=600;frame_diag.auto_fire_ticks=0;frame_diag.auto_fire_delay_ticks=0;coin_frames=0;
     frame_diag.dump_tick=600;frame_diag.input_ticks=0;assert(!frame_diag_dump_ready());
     frame_diag_input();assert(pedal==1.f);
-    for(unsigned tick=0;tick<35;tick++){ss22_input_update();assert(!(arcade_bits&0x10)&&!frame_diag_dump_ready());}
-    ss22_input_update();assert((arcade_bits&0x30)==0x30&&frame_diag.auto_fire_ticks==11);
-    for(unsigned tick=0;tick<11;tick++)ss22_input_update();assert(arcade_bits&0x10);
-    ss22_input_update();assert(!(arcade_bits&0x10));
-    assert(frame_diag.input_ticks==48&&!frame_diag_dump_ready());
-    frame_diag.input_ticks=599;assert(!frame_diag_dump_ready());ss22_input_update();assert(frame_diag_dump_ready());
+    for(unsigned tick=1;tick<600;tick++){
+        ss22_input_update();
+        assert((arcade_bits&0x11)==0); /* Safe boot: no credit or fire before the configured tick. */
+        assert(arcade_bits&0x20); /* The synthetic pedal remains held while boot settles. */
+        assert(!frame_diag.autostart_started&&!frame_diag_dump_ready());
+    }
+    assert(frame_diag.input_ticks==599&&!coin_frames&&!frame_diag.auto_fire_delay_ticks);
+    for(unsigned tick=600;tick<=647;tick++){
+        ss22_input_update();
+        bool coin=(tick>=601&&tick<=606)||(tick>=613&&tick<=618)||(tick>=625&&tick<=630);
+        bool fire=tick>=635&&tick<=646;
+        assert(((arcade_bits&1)!=0)==coin);
+        assert(((arcade_bits&0x10)!=0)==fire);
+        assert(arcade_bits&0x20);
+        if(tick==600)assert(frame_diag.autostart_started&&frame_diag_dump_ready());
+    }
+    assert(frame_diag.input_ticks==647&&frame_diag.auto_fire_ticks==0&&!frame_diag.auto_fire_delay_ticks&&!coin_frames);
     frame_diag.force_render=false;trigger=pedal=1.f;frame_diag.auto_fire_ticks=0;coin_frames=36;
     ss22_input_update();assert(arcade_bits==0); /* Standby stays neutral without the one-shot flag. */
-    focused=true;trigger=pedal=0;coin_frames=0;frame_diag.autostart=false;frame_diag.auto_fire_delay_ticks=0;frame_diag.dump_tick=0;frame_diag.input_ticks=0;
-    puts("PASS: Frame eye target sizing, synthetic 0/90/180 yaw and IPD baseline, and standby-only autostart after credits");
+    focused=true;trigger=pedal=0;coin_frames=0;frame_diag.autostart=false;frame_diag.autostart_started=false;
+    frame_diag.auto_fire_delay_ticks=0;frame_diag.dump_tick=0;frame_diag.input_ticks=0;
+    puts("PASS: Frame synthetic geometry and delayed autostart with no early input, three credits before the 12-tick fire pulse");
 }
 #endif
 #ifndef TCVR_STEAM_FRAME
