@@ -50,8 +50,9 @@ gun angle, right stick click changes default hand, left stick click resets angle
 Report: build ID from build-info.json, scene, aim alignment, world scale,
 HUD legibility, cover behavior, controls, comfort, audio and any crash.
 Wearer-assisted validation has confirmed the Valve Frame profile, 2160×2160 per eye,
-120 Hz, settings reload and subjectively good smoothness. Full controls, paired scene
-captures, yaw/multiview, and audio still need validation.
+120 Hz, settings reload and subjectively good smoothness. The wearer accepted the
+world-effect depth correction on build 3e60774. Full controls, yaw/multiview and audio
+still need validation; matched quiet-scene stereo captures are inspected.
 See evidence/ for the recorded build/package/device verification results.
 
 DISPLAY AND CURRENT ACCEPTANCE
@@ -62,13 +63,18 @@ Startup, ROM persistence and eye-colour probe are verified unattended. The weare
 reached the opening train with the Valve Frame profile at 2160×2160 per eye and 120 Hz,
 confirmed settings reload, and described smoothness as good. The barrel had appeared
 too high; the wearer accepted saved `gun_pitch=-15` for their device. This is not the
-fresh-install default. One right-eye train capture shows TIME EXTENDED/WAIT; a paired
-capture, yaw sweep, multiview, full controls and audio assessment remain pending. Crate
-explosions appear over scenery and are under investigation.
+fresh-install default. An early right-eye train capture shows TIME EXTENDED/WAIT;
+later matched 2160-square quiet-scene pairs verify the HUD and calibrated shot marks.
+On build 3e60774, the wearer reported that the explosions now look great. World
+billboards use the game-authored depth estimate, while screen flashes remain overlays.
+Matched active-flame images, yaw/multiview, full controls and audio assessment remain
+pending.
 
-Sustained 120 FPS is not established. There are 62 clean pre-capture 240-frame reports;
-the last 15 show 6.66–7.12 ms render-wall time and 22–69 over-budget frames per report.
-Those counters are not compositor dropped-frame measurements. A diagnostic self-exit
+Sustained 120 FPS is not established. The latest 3e60774 wear run produced 68 focused
+240-frame reports at 120 Hz/2160-square eyes, with no image or pose capture. Window
+means were 4.88–7.25 ms; the largest sample was 88.16 ms, and 3,520 of 16,320 frames
+exceeded the render-wall budget. These counters are not compositor dropped frames.
+A diagnostic self-exit
 produced SIGSEGV after XR cleanup with no recovered stack. Normal Steam quit ended with
 status 137, which does not prove clean native shutdown. The grip-pivot diagnostic is
 experimental and off by default.
@@ -79,3 +85,11 @@ For replaying the saved train session, place the input at
 replay; malformed input preserves the marker, replay source, and normal session files.
 Replay does not rotate or create player recordings and keeps its EEPROM image in memory.
 The one-shot `vrdiag.once` still controls force-render and capture tick settings.
+
+FOVEATION
+This build does not request game-controlled foveation profiles. Valve documents runtime
+foveation and eye tracking; current logs show its FDM injection layer loaded through
+Zink. Layer loading alone does not prove foveation is active. CPU/GPU measurement
+and repeated same scene on/off comparisons are required before recommending a
+foveation default. The accepted build keeps its separate-eye path and full eye
+resolution.
