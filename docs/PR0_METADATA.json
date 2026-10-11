@@ -3,7 +3,7 @@
   "milestone": "PR0",
   "status": "EXPERIMENTAL",
   "publication_status": "public experimental source; no binary release",
-  "tested_commit": null,
+  "tested_commit": "d571dddf8b9be4f643d2da084210fdfcbf42c322",
   "supported_targets": [
     "Steam Frame Lepton / Android ARM64 / SteamVR OpenXR"
   ],
@@ -86,7 +86,26 @@
     },
     "test_only_change": "tests/test_frame_native_syntax.py now resolves compiler source paths before matching, handling macOS /tmp canonicalization. The APK build used the unmodified production source at full_build_source_commit.",
     "full_build_source_commit": "d662948d098c57122a24a7333126097fcb778a9c",
-    "current_solo_build": "Pending a fresh Frame package from the restored solo source.",
+    "current_solo_build": {
+      "source_commit": "d571dddf8b9be4f643d2da084210fdfcbf42c322",
+      "source_worktree_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "result": "PASS: normal Frame build, ARM64 dependency closure, APK v3 signature, 16 KiB ZIP alignment, ROM/key exclusion, stale multiplayer class/identity exclusion and production solo startup.",
+      "apk_sha256": "d63fc9a88d9e32dde1e5e66d1a6fd4248afb53f373dba5d8e75e2f44aedcf390",
+      "apk_bytes": 5842120,
+      "package": "org.timecrisis.frame",
+      "roms_bundled": false,
+      "hardware_tested": false,
+      "accepted_solo_comparison": {
+        "baseline_apk_sha256": "b231674c260ebdc0bec8128fd539372b057f0e98b0f4f1dbc834f71877e60793",
+        "equal_runtime_members": 9,
+        "different_runtime_members": 0,
+        "exclusions": [
+          "signature metadata",
+          "license notices"
+        ],
+        "scope": "All native libraries, DEX, manifest, resources and game manifests/model are byte-identical to the previously wearer-accepted large-window solo APK."
+      }
+    },
     "current_solo_validation": {
       "commands": [
         "python3 tests/test_solo_startup.py",
@@ -108,7 +127,7 @@
     "An earlier rear-facing view check recorded a black image; not retested in this build check."
   ],
   "source_publication_rights": "Port and pinned reconstruction source retain their original MIT notices. The repository includes generated C source, not a ROM archive or extracted game media. Source notices do not grant rights to the original arcade ROM, graphics or audio.",
-  "binary_distribution": "Source-only publication; the recorded APK belongs to the separate multiplayer branch and was removed. No solo APK has been built from the restored source yet.",
+  "binary_distribution": "Public source only; the restored ROM-free solo APK was built and verified for local delivery. No APK, ROM, extracted chip or signing key is included in Git.",
   "build_isolation": "Fresh checkout at immutable source commit; HOME pointed to an isolated temporary directory; system/global Git configuration and personal Git credentials disabled. The custom signing key was generated at the explicit temporary HOME and verified against the APK certificate. Public submodule, SDL and Khronos dependencies were fetched anonymously. No ROM hash, ROM file, APK, or signing key is in the repository or receipt.",
   "distribution_blockers": [],
   "publication_date": "2026-10-11",
@@ -116,7 +135,9 @@
     "status": "work in progress",
     "branch": "steam-frame-multiplayer",
     "branch_separation": "complete; multiplayer is excluded from steam-frame",
-    "gameplay_confirmation_scope": "solo play on steam-frame"
+    "gameplay_confirmation_scope": "solo play on steam-frame",
+    "requirements": "Independent P1/P2 health, ammunition, damage, cover and reload; shared-resource prototype is obsolete.",
+    "result": "Paired prototype gameplay failed. Real-game encounter tracing did not establish a safe independent-player adapter; the original death reaction ends the global stage script and cover changes shared enemy scheduling/camera. Feature remains excluded from steam-frame."
   },
-  "tested_commit_note": "The current solo restoration is being validated before the coordinator creates its scoped commit."
+  "tested_commit_note": "Clean solo restoration commit; final documentation changes do not alter runtime inputs."
 }
