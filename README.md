@@ -4,12 +4,12 @@ This is my Steam Frame fork of [DR-89's Time Crisis VR](https://github.com/DR-89
 
 **EXPERIMENTAL.** I made this for personal use. Bring your own matching **Time Crisis World TS2 Ver.B** ROM archive (`timecris.zip`). The Frame build makes a ROM-free APK and imports your game files separately.
 
-I've played it on my Frame at **2160×2160 per eye with SteamVR set to 120 Hz**. The gun angle, opening train explosions, audio, grip cover/reload and Menu pause/resume are working. I've also tried the larger gameplay window and darker surround, and I'm happy with how they look.
+I've played the solo version on my Frame at **2160×2160 per eye with SteamVR set to 120 Hz**. The gun angle, opening train explosions, audio, grip cover/reload and Menu pause/resume are working. I've also tried the larger gameplay window and darker surround, and I'm happy with how they look.
 
 ## What this fork adds
 
 - Standalone Frame support, with its own Android package, OpenXR loader and controller bindings.
-- A native VR startup lobby with Solo, Host and Join options.
+- A native VR startup lobby with Solo, Host and Join options. **Host and Join are unfinished multiplayer work.**
 - A larger gameplay window: the default is 60% wider and taller than the original port's view, filling more of the lenses without changing the headset's field of view.
 - A full cyan frame around the original arcade view, with the scenery outside it darkened by 65%. It makes the intended shooting area easier to see while keeping the game and HUD bright.
 - Corrected depth for world effects such as the opening train's crate explosions, so they sit with the scenery instead of floating over it.
@@ -20,7 +20,7 @@ I've played it on my Frame at **2160×2160 per eye with SteamVR set to 120 Hz**.
 
 The original VR port supplies the reconstructed stereo world, gun rendering and arcade gameplay. The arcade simulation keeps its original rate of about 60 Hz while the headset follows SteamVR's display rate.
 
-Steam Frame and Quest 3 can also share a fresh local Wi-Fi run. See the [LAN co-op guide](docs/LAN-COOP.md) for lobby behavior, network ports, compatibility, build commands, and current verification limits.
+**Multiplayer is still in development and is not ready to recommend.** The co-op and new startup-lobby code are currently on this same `steam-frame` branch, not a separate release branch. My gameplay notes above are for solo play. The [LAN co-op notes](docs/LAN-COOP.md) describe the work in progress.
 
 ## Controls
 

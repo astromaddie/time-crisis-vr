@@ -2,6 +2,8 @@
 
 **EXPERIMENTAL.** Public source for the Steam Frame port; no binary release is included.
 
+**Multiplayer is unfinished.** The default `steam-frame` branch currently includes co-op and the new startup lobby; there is no separate multiplayer branch. The user’s gameplay confirmation applies to solo play, not a completed co-op session.
+
 - **Current host-tested source:** `a3586d7117507085cdf167ca2190e9fee503d3fe`.
 - **Fresh full-build source:** `d662948d098c57122a24a7333126097fcb778a9c`.
 - **Pinned reconstruction submodule:** `upstream` at `6aaa90b4cbc7a23733e1c9f5f9a5e772a19fe23d`.

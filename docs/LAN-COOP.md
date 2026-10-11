@@ -1,6 +1,8 @@
 # Local LAN co-op
 
-The Steam Frame and Quest 3 can share one fresh Time Crisis run over the same local Wi-Fi network. The headset that hosts controls P1; the joining headset controls P2. The game and simulation run on both headsets. The Frame coordinates one ordered arcade input stream so both simulations consume the same input at each `rr_frame`; the joiner waits at a tick boundary when the next canonical input has not arrived. No PC, cloud account, or remote avatar is involved.
+**Work in progress — not ready to recommend.** This code is currently included on the default `steam-frame` branch, rather than isolated on a separate multiplayer branch. These notes describe the intended behavior and development checks, not a finished multiplayer release.
+
+The co-op implementation aims to let Steam Frame and Quest 3 share one fresh Time Crisis run over the same local Wi-Fi network. The headset that hosts controls P1; the joining headset controls P2. The game and simulation run on both headsets. The Frame coordinates one ordered arcade input stream so both simulations consume the same input at each `rr_frame`; the joiner waits at a tick boundary when the next canonical input has not arrived. No PC, cloud account, or remote avatar is involved.
 
 ## Launch and lobby
 
@@ -33,4 +35,4 @@ The first command builds `artifacts/TimeCrisisVR-quest3-debug.apk`; the second b
 
 ## Verification status
 
-Host tests exercise the real TCP/UDP lobby, compatibility handshake, fresh EEPROM barrier, per-tick input ordering, cover/shot arbitration, pause/resume, disconnect, stalled-but-open socket watchdog, launcher routing, EEPROM write guard, and Solo recording history. Quest and Frame production HUD raster tests cover the paused and failed-session status panel. Source and paired-package checks do not establish deterministic parity under actual emulation, successful worn play, headset lobby navigation, or reliable Wi-Fi behavior on a particular router; those remain unverified.
+Host tests exercise the real TCP/UDP lobby, compatibility handshake, fresh EEPROM barrier, per-tick input ordering, cover/shot arbitration, pause/resume, disconnect, stalled-but-open socket watchdog, launcher routing, EEPROM write guard, and Solo recording history. Quest and Frame production HUD raster tests cover the paused and failed-session status panel. These checks do not establish reliable shared gameplay on the two headsets. Multiplayer remains unfinished.

@@ -120,5 +120,11 @@
   "binary_distribution": "Source-only publication; the recorded clean Frame APK excluded the ROM and was generated locally, then removed.",
   "build_isolation": "Fresh checkout at immutable source commit; HOME pointed to an isolated temporary directory; system/global Git configuration and personal Git credentials disabled. The custom signing key was generated at the explicit temporary HOME and verified against the APK certificate. Public submodule, SDL and Khronos dependencies were fetched anonymously. No ROM hash, ROM file, APK, or signing key is in the repository or receipt.",
   "distribution_blockers": [],
-  "publication_date": "2026-10-11"
+  "publication_date": "2026-10-11",
+  "multiplayer_status": {
+    "status": "unfinished development; not ready to recommend",
+    "branch": "steam-frame",
+    "separate_multiplayer_branch": false,
+    "gameplay_confirmation_scope": "solo play; no multiplayer readiness claim"
+  }
 }
