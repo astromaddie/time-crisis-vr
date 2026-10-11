@@ -81,6 +81,16 @@ int main(void){
     assert(qvr_flat_camera(&cx,&cy,&focal));near(focal,772.6f);
     V3 ray=v3((430-cx)/focal,(cy-180)/focal,-1);
     assert(qvr_aim(v3(0,0,0),ray,&x,&y,&hit));near(x,430/640.f);near(y,180/480.f);near(hit.z,-2.5f);
+    /* The full-frame guide marks the native viewport, including with an
+     * off-centre live camera. Probe immediately inside/outside all four edges. */
+    for(int edge=0;edge<4;edge++)for(int inside=0;inside<2;inside++){
+        float delta=inside?.1f:-.1f;
+        float px=edge==0?delta:edge==1?640-delta:320;
+        float py=edge==2?delta:edge==3?480-delta:240;
+        V3 edge_ray=v3((px-cx)/focal,(cy-py)/focal,-1);
+        assert(qvr_aim(v3(0,0,0),edge_ray,&x,&y,&hit)==(bool)inside);
+        near(x,px/640);near(y,py/480);near(hit.z,-2.5f);
+    }
     /* A controller offset must still project its actual hit, not its direction. */
     assert(qvr_aim(v3(.25f,-.12f,0),v3(0,0,-1),&x,&y,&hit));near(x,(312+772.6f*.25f/2.5f)/640);
     qvr_flat_view=1;assert(!qvr_flat_camera(&cx,&cy,&focal));near(focal,500);near(cx,320);

@@ -1205,6 +1205,9 @@ bool ss22_host_frame(void){
             {
             qgl_eye(v[i],p[i]);
             if(stereo_frame)qgl_stereo_blit(i);else ss22_draw(eye->w,eye->h);
+#ifdef TCVR_STEAM_FRAME
+            if(!paused&&!qvr_flat_view)qgl_play_area();
+#endif
             if(options.laser_enabled&&focused&&aim_valid&&!paused)qgl_pointer(gun_origin,gun_hit);
             qgl_flush();
             }

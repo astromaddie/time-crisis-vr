@@ -301,6 +301,38 @@ void qglTexCoord4f(float s,float t,float r,float q){uv[0]=s;uv[1]=t;uv[2]=r;uv[3
 void qglVertex2f(float x,float y){if(im_count>=4096)abort();Vertex*v=&immediate[im_count++];v->p[0]=x;v->p[1]=y;v->p[2]=0;v->p[3]=0;memcpy(v->c,color,16);memcpy(v->uv,uv,16);}
 void qglVertex4f(float x,float y,float z,float w){qglVertex2f(x,y);immediate[im_count-1].p[2]=z;immediate[im_count-1].p[3]=w;}
 void qglEnd(void){if(im_mode==GL_QUADS){for(int i=0;i+3<im_count;i+=4){Vertex v[6]={immediate[i],immediate[i+1],immediate[i+2],immediate[i],immediate[i+2],immediate[i+3]};draw(v,6,GL_TRIANGLES);}}else draw(immediate,im_count,im_mode);}
+#ifdef TCVR_STEAM_FRAME
+/* Native-pixel stroke on the same live-camera plane as arcade HUD sprites.
+ * Disjoint bars avoid double alpha at the corners; no surrounding fill. */
+static void play_area_stroke(float width,const float rgba[4]){
+    float h=width*.5f;
+    const float bars[4][4]={
+        {-h,-h,640+h,h},{-h,480-h,640+h,480+h},
+        {-h,h,h,480-h},{640-h,h,640+h,480-h}
+    };
+    const int corner[6]={0,1,2,0,2,3};
+    Vertex vertices[24]={0};
+    for(int b=0;b<4;b++)for(int i=0;i<6;i++){
+        int c=corner[i];Vertex *v=&vertices[b*6+i];
+        v->p[0]=bars[b][c==1||c==2?2:0];
+        v->p[1]=bars[b][c>=2?3:1];
+        memcpy(v->c,rgba,sizeof v->c);v->uv[3]=1;
+    }
+    draw(vertices,24,GL_TRIANGLES);
+}
+void qgl_play_area(void){
+    int t0=texture_on[0],t1=texture_on[1],a=alpha_on,r=alpha_replace,b=blend_on;
+    float scale=rgb_scale;rgb_scale=1;
+    GLenum src=blend_src,dst=blend_dst;GLboolean mask[4];memcpy(mask,color_mask,sizeof mask);
+    texture_on[0]=texture_on[1]=alpha_on=alpha_replace=0;
+    blend_on=1;blend_src=GL_SRC_ALPHA;blend_dst=GL_ONE_MINUS_SRC_ALPHA;memset(color_mask,1,sizeof color_mask);
+    const float backing[4]={16/255.f,25/255.f,27/255.f,.8f};
+    const float cyan[4]={114/255.f,213/255.f,232/255.f,.85f};
+    play_area_stroke(5,backing);play_area_stroke(2,cyan);
+    texture_on[0]=t0;texture_on[1]=t1;alpha_on=a;alpha_replace=r;blend_on=b;
+    blend_src=src;blend_dst=dst;rgb_scale=scale;memcpy(color_mask,mask,sizeof mask);
+}
+#endif
 void qgl_pointer(V3 origin,V3 end){
     Vertex v[2]={{{origin.x,origin.y,origin.z,1},{.2f,.85f,1,1},{0,0,0,1}},{{end.x,end.y,end.z,1},{.2f,.85f,1,1},{0,0,0,1}}};
     int t0=texture_on[0],t1=texture_on[1],a=alpha_on;texture_on[0]=texture_on[1]=alpha_on=0;

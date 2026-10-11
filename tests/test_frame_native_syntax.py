@@ -8,7 +8,7 @@ sys.path.insert(0, str(ROOT/'tools'))
 from host_paths import executable
 
 NINJA=executable('ninja')
-for source in ('quest_host.c','quest_main.c','quest_ui.c'):
+for source in ('quest_host.c','quest_main.c','quest_ui.c','quest_gl.c'):
     command=subprocess.check_output([NINJA,'-C',str(NATIVE),'-t','commands','CMakeFiles/main.dir/'+source+'.o'],text=True).splitlines()[-1]
     original=shlex.split(command);arguments=[];skip=False
     for argument in original:

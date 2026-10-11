@@ -13,5 +13,8 @@ void qgl_scene_begin(const uint8_t lut[3][256],int w,int h);
 void qgl_atlas_texture(unsigned texture,int page,int dimension,int pages);
 void qgl_flush(void);
 void qgl_flat_camera(float cx,float cy,float focal);
+#ifdef TCVR_STEAM_FRAME
+void qgl_play_area(void);
+#endif
 void qgl_pointer(V3 origin,V3 end);
 void qgl_shutdown(void);
