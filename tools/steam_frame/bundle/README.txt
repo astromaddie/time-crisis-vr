@@ -65,6 +65,15 @@ See evidence/ for the recorded build/package/device verification results.
 DISPLAY AND CURRENT ACCEPTANCE
 The default renderer uses separate eye passes with a 2160-pixel maximum per eye.
 frame-display.cfg can set eye_resolution=512..2160 and multiview=1 for comparison.
+The approved Large window defaults to gameplay_scale=1.6 (range 1..2) and
+outside_darkening=0.65 (range 0..1). Settings take effect on next launch; other
+keys are preserved. Scale 1 restores the earlier dimensions; 1.35 is Roomier.
+Darkening 0 disables the surround. Bad/nonfinite values use defaults and finite
+out-of-range values are clamped. The full cyan frame remains at the live 640x480
+HUD boundary, enlarged with the world at fixed depth. Eye FOV/IPD are unchanged.
+This changes physical proportions and relative parallax; it is not uniform world
+scaling. The border is a 2.5m-plane cue, while shooting uses actual world surfaces.
+The larger window/surround are source-complete; device and worn checks are pending.
 The Frame build follows the runtime cadence; refresh is controlled by SteamVR.
 Startup, ROM persistence and eye-colour probe are verified unattended. The wearer
 reached the opening train with the Valve Frame profile at 2160×2160 per eye and 120 Hz,

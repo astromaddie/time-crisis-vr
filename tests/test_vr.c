@@ -11,7 +11,53 @@ static size_t read_text(FILE *stream,char *out,size_t capacity){
     fflush(stream);rewind(stream);size_t n=fread(out,1,capacity-1,stream);out[n]=0;return n;
 }
 #endif
+#ifdef TCVR_STEAM_FRAME
+static void scaled_camera_tests(void){
+    qvr_display_config(NULL);near(qvr_gameplay_scale,1.6f);near(qvr_outside_darkening,.65f);
+    const char *configs[]={"eye_resolution=2160\nmultiview=0\ngameplay_scale=nan\noutside_darkening=inf\n", "gameplay_scale=-3\noutside_darkening=-1\n", "gameplay_scale=10\noutside_darkening=2\n", "gameplay_scale=oops\noutside_darkening=oops\n", "gameplay_scale=1.35\noutside_darkening=0.3\n"};
+    const float expected[5][2]={{1.6f,.65f},{1,0},{2,1},{1.6f,.65f},{1.35f,.3f}};
+    for(int i=0;i<5;i++){FILE *f=tmpfile();assert(f);fputs(configs[i],f);rewind(f);qvr_display_config(f);near(qvr_gameplay_scale,expected[i][0]);near(qvr_outside_darkening,expected[i][1]);rewind(f);char text[256];assert(fread(text,1,strlen(configs[i]),f)==strlen(configs[i]));assert(!memcmp(text,configs[i],strlen(configs[i])));fclose(f);}
+    const float scales[]={1,1.35f,1.6f};
+    for(int k=0;k<3;k++){
+        qvr_gameplay_scale=scales[k];geo_quad q={0};q.vr_focal=772.6f;q.vr_cx=312;q.vr_cy=236;q.nrv=4;
+        for(int i=0;i<4;i++){q.rv[i].sx16=(i==1||i==2?500:140)*16;q.rv[i].sy16=(i>=2?370:110)*16;q.rv[i].z=30000;}
+        qvr_scene_begin();qvr_scene_quad(&q);
+        for(int i=0;i<4;i++)q.rv[i].z=20000;qvr_scene_quad(&q);
+        sprite_item items[2]={{.x0=350,.y0=180,.w=33,.h=33,.tile=QVR_IMPACT_FIRST},{.x0=196,.y0=279,.w=61,.h=71,.tile=10131,.z=0x228d13}};
+        qvr_sprites_prepare(items,2);float cx,cy,f,x,y,v[4],corners[4][4];V3 hit;
+        assert(qvr_flat_camera(&cx,&cy,&f));near(cx,312);near(cy,236);near(f,772.6f/scales[k]);
+        qvr_vertex(&q,430,180,20000,v);near(v[0],(430-cx)*20/f);near(v[1],(cy-180)*20/f);near(v[2],-20);
+        assert(qvr_aim(v3(0,0,0),v3((430-cx)/f,(cy-180)/f,-1),&x,&y,&hit));near(x,430/640.f);near(y,180/480.f);near(hit.z,-20);
+        for(int j=0;j<2;j++){assert(qvr_sprite_corners(&items[j],j,corners));near(corners[0][2],j?-167.187f:-19.6f);near(cx+f*corners[0][0]/-corners[0][2],items[j].x0);near(cy-f*corners[0][1]/-corners[0][2],items[j].y0);}
+        // Nonzero controller origin: use known world intersections, independently
+        // project those points back with the authored focal and requested scale.
+        V3 origin=v3(.25f,-.12f,.3f),direction=v3(.04f,.01f,-1);
+        assert(qvr_aim(origin,direction,&x,&y,&hit));
+        float t=20.3f;near(hit.z,-20);
+        near(x,(312+772.6f*(.25f+.04f*t)/(20*scales[k]))/640);
+        near(y,(236-772.6f*(-.12f+.01f*t)/(20*scales[k]))/480);
+        // Misses and strict native edges use the same camera as HUD and guide.
+        qvr_scene_begin();qvr_sprites_prepare(NULL,0);
+        assert(qvr_aim(origin,direction,&x,&y,&hit));
+        t=2.8f;near(hit.z,-2.5f);
+        near(x,(312+772.6f*(.25f+.04f*t)/(2.5f*scales[k]))/640);
+        near(y,(236-772.6f*(-.12f+.01f*t)/(2.5f*scales[k]))/480);
+        for(int edge=0;edge<4;edge++)for(int side=-1;side<=1;side++){
+            float px=edge==0?side*.1f:edge==1?640-side*.1f:320;
+            float py=edge==2?side*.1f:edge==3?480-side*.1f:240;
+            bool inside=qvr_aim(v3(0,0,0),v3((px-cx)/f,(cy-py)/f,-1),&x,&y,&hit);
+            if(side)assert(inside==(side>0));near(x,px/640);near(y,py/480);near(hit.z,-2.5f);
+        }
+        qvr_flat_view=1;qvr_flat_camera(&cx,&cy,&f);near(f,500);qvr_vertex(&q,430,180,20000,v);near(v[0],430);near(v[3],0);qvr_flat_view=0;
+    }
+    qvr_gameplay_scale=1;
+}
+#endif
 int main(void){
+#ifdef TCVR_STEAM_FRAME
+    // Run scaled tests after baseline assertions to avoid retained-camera coupling.
+    qvr_gameplay_scale=1;
+#endif
     const float full_rates[]={90,72,120,80},limited_rates[]={72,90,80},compat_rates[]={60,72};
     near(qrefresh_choose(full_rates,4,120),120);near(qrefresh_choose(limited_rates,3,120),90);
     near(qrefresh_choose(full_rates,4,90),90);near(qrefresh_choose(compat_rates,2,120),72);
@@ -202,6 +248,9 @@ int main(void){
     assert(strstr(bounded_text,"item=1023 idx=1023"));assert(!strstr(bounded_text,"item=1024 idx=1024"));
     unsigned report_lines=0;for(char *cursor=bounded_text;(cursor=strstr(cursor,"[vr-sprite]"));cursor+=11)report_lines++;
     assert(report_lines==1025);free(bounded_text);
+#endif
+#ifdef TCVR_STEAM_FRAME
+    scaled_camera_tests();
 #endif
     puts("PASS: VR timing/math, refresh selection, HUD/aim, surface shot marks, Frame world-sprite depth and exclusions, bounded sprite/mixer report, nearest hit, grid overflow and unchanged desktop projection");return 0;
 }

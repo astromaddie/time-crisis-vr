@@ -22,10 +22,17 @@ static int multi_w,multi_h;
 static uint8_t multi_gamma_table[3][256],multi_uploaded_lut[3][256];
 typedef void (GL_APIENTRY *MultiviewProc)(GLenum,GLenum,GLuint,GLint,GLint,GLsizei);
 static MultiviewProc framebuffer_multiview;
+#ifdef TCVR_STEAM_FRAME
+static const char *world_vertex=
+    "#version 300 es\nprecision highp float;layout(location=0) in vec4 aPos;layout(location=1) in vec4 aColor;layout(location=2) in vec4 aUV;uniform mat4 view[2],proj[2];uniform vec4 flatCam;\n#ifdef QGL_MULTIVIEW\nlayout(num_views=2) in;\n#define EYE gl_ViewID_OVR\n#else\n#define EYE 0\n#endif\nout vec4 c;out vec3 uv;out vec3 maskOrigin,maskRay;flat out int outsideMask;flat out float layer;void main(){outsideMask=aPos.w<-.5?1:0;maskOrigin=vec3(0);maskRay=vec3(0);if(outsideMask!=0){mat4 iv=inverse(view[EYE]);vec4 ray=inverse(proj[EYE])*vec4(aPos.xy,-1,1);maskOrigin=iv[3].xyz;maskRay=mat3(iv)*(ray.xyz/ray.w);gl_Position=vec4(aPos.xy,0,1);c=aColor;uv=vec3(0,0,1);layer=0.;return;}vec3 p;if(aPos.w>0.5){p=aPos.xyz;uv=vec3(aUV.xy/max(aUV.w,1e-12),1);}else{p=vec3((aPos.x-flatCam.x)*flatCam.z,(flatCam.y-aPos.y)*flatCam.z,-flatCam.w);uv=vec3(aUV.xy,aUV.w);}gl_Position=proj[EYE]*view[EYE]*vec4(p,1);c=aColor;layer=aUV.z;}";
+static const char *world_fragment=
+    "#version 300 es\nprecision highp float;in vec4 c;in vec3 uv;in vec3 maskOrigin,maskRay;flat in int outsideMask;uniform vec4 flatCam;flat in float layer;uniform sampler2D tex;uniform highp sampler2DArray atlasTex;uniform int textured,alphaTest,fog,replaceAlpha;uniform float scale,threshold;uniform vec3 fogColor;out vec4 frag;void main(){if(outsideMask!=0){if(abs(maskRay.z)>1e-8){float t=(-flatCam.w-maskOrigin.z)/maskRay.z;vec2 hit=maskOrigin.xy+t*maskRay.xy;vec2 pixel=vec2(flatCam.x+hit.x/flatCam.z,flatCam.y-hit.y/flatCam.z);if(t>0.&&pixel.x>=0.&&pixel.x<=640.&&pixel.y>=0.&&pixel.y<=480.)discard;}frag=c;return;}vec2 st=uv.xy/max(uv.z,1e-12);vec4 t=textured==2?texture(atlasTex,vec3(st,layer)):(textured!=0?texture(tex,st):vec4(1));vec4 v=t*c;v.rgb*=textured!=0?scale:1.0;if(replaceAlpha!=0)v.a=t.a;if(fog!=0){v.rgb=mix(fogColor,v.rgb,c.a);v.a=t.a;}if(alphaTest!=0&&v.a<=threshold)discard;frag=v;}";
+#else
 static const char *world_vertex=
     "#version 300 es\nprecision highp float;layout(location=0) in vec4 aPos;layout(location=1) in vec4 aColor;layout(location=2) in vec4 aUV;uniform mat4 view[2],proj[2];uniform vec4 flatCam;\n#ifdef QGL_MULTIVIEW\nlayout(num_views=2) in;\n#define EYE gl_ViewID_OVR\n#else\n#define EYE 0\n#endif\nout vec4 c;out vec3 uv;flat out float layer;void main(){vec3 p;if(aPos.w>0.5){p=aPos.xyz;uv=vec3(aUV.xy/max(aUV.w,1e-12),1);}else{p=vec3((aPos.x-flatCam.x)*flatCam.z,(flatCam.y-aPos.y)*flatCam.z,-flatCam.w);uv=vec3(aUV.xy,aUV.w);}gl_Position=proj[EYE]*view[EYE]*vec4(p,1);c=aColor;layer=aUV.z;}";
 static const char *world_fragment=
     "#version 300 es\nprecision highp float;in vec4 c;in vec3 uv;flat in float layer;uniform sampler2D tex;uniform highp sampler2DArray atlasTex;uniform int textured,alphaTest,fog,replaceAlpha;uniform float scale,threshold;uniform vec3 fogColor;out vec4 frag;void main(){vec2 st=uv.xy/max(uv.z,1e-12);vec4 t=textured==2?texture(atlasTex,vec3(st,layer)):(textured!=0?texture(tex,st):vec4(1));vec4 v=t*c;v.rgb*=textured!=0?scale:1.0;if(replaceAlpha!=0)v.a=t.a;if(fog!=0){v.rgb=mix(fogColor,v.rgb,c.a);v.a=t.a;}if(alphaTest!=0&&v.a<=threshold)discard;frag=v;}";
+#endif
 static const char *uniform_names[]={"view","proj","tex","textured","alphaTest","fog","replaceAlpha","scale","threshold","fogColor","flatCam"};
 /* Upload each ordered group before any draw reads its vertex buffer. Updating a
  * shared buffer between draws serializes the Adreno driver. Texture writes are
@@ -303,7 +310,7 @@ void qglVertex4f(float x,float y,float z,float w){qglVertex2f(x,y);immediate[im_
 void qglEnd(void){if(im_mode==GL_QUADS){for(int i=0;i+3<im_count;i+=4){Vertex v[6]={immediate[i],immediate[i+1],immediate[i+2],immediate[i],immediate[i+2],immediate[i+3]};draw(v,6,GL_TRIANGLES);}}else draw(immediate,im_count,im_mode);}
 #ifdef TCVR_STEAM_FRAME
 /* Native-pixel stroke on the same live-camera plane as arcade HUD sprites.
- * Disjoint bars avoid double alpha at the corners; no surrounding fill. */
+ * Disjoint bars avoid double alpha at the corners. */
 static void play_area_stroke(float width,const float rgba[4]){
     float h=width*.5f;
     const float bars[4][4]={
@@ -320,12 +327,21 @@ static void play_area_stroke(float width,const float rgba[4]){
     }
     draw(vertices,24,GL_TRIANGLES);
 }
-void qgl_play_area(void){
+void qgl_play_area(float outside_darkening){
     int t0=texture_on[0],t1=texture_on[1],a=alpha_on,r=alpha_replace,b=blend_on;
     float scale=rgb_scale;rgb_scale=1;
     GLenum src=blend_src,dst=blend_dst;GLboolean mask[4];memcpy(mask,color_mask,sizeof mask);
     texture_on[0]=texture_on[1]=alpha_on=alpha_replace=0;
     blend_on=1;blend_src=GL_SRC_ALPHA;blend_dst=GL_ONE_MINUS_SRC_ALPHA;memset(color_mask,1,sizeof color_mask);
+    /* One fullscreen triangle has no shared-edge blend seam and reaches every
+     * eye pixel. The shader cuts out the live plane using actual eye rays, even
+     * when the plane crosses the eye horizon or is entirely behind the viewer. */
+    if(outside_darkening>0){
+        Vertex exterior[3]={0};
+        const float xy[3][2]={{-1,-1},{3,-1},{-1,3}};
+        for(int i=0;i<3;i++){exterior[i].p[0]=xy[i][0];exterior[i].p[1]=xy[i][1];exterior[i].p[3]=-1;exterior[i].c[3]=outside_darkening;}
+        draw(exterior,3,GL_TRIANGLES);
+    }
     const float backing[4]={16/255.f,25/255.f,27/255.f,.8f};
     const float cyan[4]={114/255.f,213/255.f,232/255.f,.85f};
     play_area_stroke(5,backing);play_area_stroke(2,cyan);

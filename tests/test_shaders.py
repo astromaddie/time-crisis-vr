@@ -28,7 +28,13 @@ compile_shader=bind(gl,'glCompileShader',None,U);get=bind(gl,'glGetShaderiv',Non
 log=bind(gl,'glGetShaderInfoLog',None,U,I,P,P)
 create_program=bind(gl,'glCreateProgram',U);attach=bind(gl,'glAttachShader',None,U,U);link=bind(gl,'glLinkProgram',None,U)
 get_program=bind(gl,'glGetProgramiv',None,U,U,P);log_program=bind(gl,'glGetProgramInfoLog',None,U,I,P,P)
-sources=[ast.literal_eval(s) for s in re.findall(r'("#version(?:[^"\\]|\\.)*")',(ROOT/'quest/quest_gl.c').read_text())]
+# This legacy suite verifies Quest's unchanged shaders; Frame has its own
+# exact-C-string extraction and rendered mask test in test_play_area_render.py.
+shader_text=(ROOT/'quest/quest_gl.c').read_text()
+start=shader_text.index('#ifdef TCVR_STEAM_FRAME\nstatic const char *world_vertex=')
+end=shader_text.index('\n#endif',start)
+shader_text=shader_text[:start]+shader_text[start:end].split('\n#else\n',1)[1]+shader_text[end+len('\n#endif'):]
+sources=[ast.literal_eval(s) for s in re.findall(r'("#version(?:[^"\\]|\\.)*")',shader_text)]
 assert len(sources)==6
 shaders=[]
 for i,s in enumerate(sources):

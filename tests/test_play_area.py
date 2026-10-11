@@ -26,28 +26,30 @@ static int texture_on[2]={1,1},alpha_on=1,alpha_replace=1,blend_on=0;
 static GLenum blend_src=1,blend_dst=0;
 static float rgb_scale=2.5f;
 static GLboolean color_mask[4]={0,1,0,1};
-static Vertex recorded[2][24];static int calls;
+static Vertex recorded[3][24];static int calls;
 static void draw(const Vertex *v,int n,GLenum mode){
-    assert(calls<2&&n==24&&mode==GL_TRIANGLES);
+    assert(calls<3&&n==(calls?24:3)&&mode==GL_TRIANGLES);
     assert(!texture_on[0]&&!texture_on[1]&&!alpha_on&&!alpha_replace);
     assert(blend_on&&blend_src==GL_SRC_ALPHA&&blend_dst==GL_ONE_MINUS_SRC_ALPHA);
     assert(rgb_scale==1);
     for(int i=0;i<4;i++)assert(color_mask[i]==1);
-    memcpy(recorded[calls++],v,24*sizeof *v);
+    memcpy(recorded[calls++],v,n*sizeof *v);
 }
 '''
 harness += production
 harness += r'''
 static void near(float a,float b){assert(fabsf(a-b)<.0002f);}
 int main(void){
-    qgl_play_area();assert(calls==2);
+    qgl_play_area(.65f);assert(calls==3);
+    for(int i=0;i<3;i++){near(recorded[0][i].p[3],-1);near(recorded[0][i].c[3],.65f);near(recorded[0][i].c[0],0);}
+    near(recorded[0][0].p[0],-1);near(recorded[0][1].p[0],3);near(recorded[0][2].p[1],3);
     assert(texture_on[0]==1&&texture_on[1]==1&&alpha_on==1&&alpha_replace==1);
     assert(!blend_on&&blend_src==1&&blend_dst==0);
     assert(rgb_scale==2.5f);
     assert(!color_mask[0]&&color_mask[1]&&!color_mask[2]&&color_mask[3]);
     for(int layer=0;layer<2;layer++){
         float w=layer?2:5,h=w/2,area=0;
-        Vertex *v=recorded[layer];
+        Vertex *v=recorded[layer+1];
         for(int i=0;i<24;i++){
             assert(v[i].p[2]==0&&v[i].p[3]==0); // same flatCam shader path as HUD
             near(v[i].c[0],(layer?114:16)/255.f);
@@ -68,6 +70,7 @@ int main(void){
         near(v[12].p[1],v[2].p[1]);near(v[14].p[1],v[6].p[1]);
         near(v[18].p[0],640-h);near(v[20].p[0],640+h);
     }
+    calls=1;qgl_play_area(0);assert(calls==3); // zero alpha queues only the two rings
     return 0;
 }
 '''
@@ -75,9 +78,9 @@ int main(void){
 subprocess.run([str(executable('cc')), '-std=c11', '-Wall', '-Wextra', '-Werror', str(out/'fixture.c'), '-o', str(out/'fixture')], check=True)
 subprocess.run([str(out/'fixture')], check=True)
 host = (ROOT/'quest/quest_host.c').read_text()
-assert '#ifdef TCVR_STEAM_FRAME\n            if(!paused&&!qvr_flat_view)qgl_play_area();\n#endif' in host
-assert host.index('if(color_probe){') < host.index('qgl_play_area();')
-assert host.index('if(stereo_frame)qgl_stereo_blit(i);else ss22_draw') < host.index('qgl_play_area();') < host.index('qgl_pointer(gun_origin,gun_hit)')
+assert '#ifdef TCVR_STEAM_FRAME\n            if(!paused&&!qvr_flat_view)qgl_play_area(qvr_outside_darkening);\n#endif' in host
+assert host.index('if(color_probe){') < host.index('qgl_play_area(qvr_outside_darkening);')
+assert host.index('if(stereo_frame)qgl_stereo_blit(i);else ss22_draw') < host.index('qgl_play_area(qvr_outside_darkening);') < host.index('qgl_pointer(gun_origin,gun_hit)')
 assert 'p=vec3((aPos.x-flatCam.x)*flatCam.z,(flatCam.y-aPos.y)*flatCam.z,-flatCam.w)' in source
 assert 'gl_Position=proj[EYE]*view[EYE]*vec4(p,1)' in source
 print('PASS: production full-frame rings, color/alpha, flat-camera path, gating, draw order and restored queued state')

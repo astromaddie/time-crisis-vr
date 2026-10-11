@@ -5,6 +5,21 @@
 #include <float.h>
 float qvr_units_per_meter=1000.0f;
 int qvr_flat_view;
+#ifdef TCVR_STEAM_FRAME
+float qvr_gameplay_scale=1.6f;
+float qvr_outside_darkening=.65f;
+void qvr_display_config(FILE *file){
+    qvr_gameplay_scale=1.6f;qvr_outside_darkening=.65f;
+    if(!file)return;
+    char line[256];float value;
+    while(fgets(line,sizeof line,file)){
+        if(sscanf(line,"gameplay_scale=%f",&value)==1)
+            qvr_gameplay_scale=isfinite(value)?fminf(2.f,fmaxf(1.f,value)):1.6f;
+        if(sscanf(line,"outside_darkening=%f",&value)==1)
+            qvr_outside_darkening=isfinite(value)?fminf(1.f,fmaxf(0.f,value)):.65f;
+    }
+}
+#endif
 
 typedef struct { float focal,cx,cy; } Camera;
 typedef struct { V3 a,b,c; Camera camera;
@@ -43,9 +58,15 @@ static bool report_grid_ready;
 
 static bool camera_valid(Camera c){return isfinite(c.focal)&&c.focal>0&&isfinite(c.cx)&&isfinite(c.cy);}
 static Camera quad_camera(const geo_quad *q){return (Camera){q->vr_focal,q->vr_cx,q->vr_cy};}
-static V3 unproject(Camera c,float x,float y,float z){return v3((x-c.cx)*z/c.focal,(c.cy-y)*z/c.focal,-z);}
+static Camera effective_camera(Camera c){
+#ifdef TCVR_STEAM_FRAME
+    if(!qvr_flat_view)c.focal/=qvr_gameplay_scale;
+#endif
+    return c;
+}
+static V3 unproject(Camera c,float x,float y,float z){c=effective_camera(c);return v3((x-c.cx)*z/c.focal,(c.cy-y)*z/c.focal,-z);}
 bool qvr_flat_camera(float *cx,float *cy,float *focal){
-    Camera c=qvr_flat_view?(Camera){500,320,240}:flat_camera;
+    Camera c=qvr_flat_view?(Camera){500,320,240}:effective_camera(flat_camera);
     *cx=c.cx;*cy=c.cy;*focal=c.focal;return !qvr_flat_view;
 }
 void qvr_vertex(const geo_quad *q,float x,float y,float z,float out[4]){
@@ -104,12 +125,13 @@ static float world_sprite_depth(const sprite_item *it){
 static void build_grid(void){
     for(int i=0;i<GRID_W*GRID_H;i++)grid[i]=-1;
     link_count=0;grid_overflow=false;
+    Camera projected=effective_camera(flat_camera);
     for(unsigned i=0;i<count;i++){
         V3 v[3]={triangles[i].a,triangles[i].b,triangles[i].c};
         float x0=FLT_MAX,y0=FLT_MAX,x1=-FLT_MAX,y1=-FLT_MAX;
         for(int j=0;j<3;j++){
-            float x=flat_camera.cx+flat_camera.focal*v[j].x/-v[j].z;
-            float y=flat_camera.cy-flat_camera.focal*v[j].y/-v[j].z;
+            float x=projected.cx+projected.focal*v[j].x/-v[j].z;
+            float y=projected.cy-projected.focal*v[j].y/-v[j].z;
             x0=fminf(x0,x);x1=fmaxf(x1,x);y0=fminf(y0,y);y1=fmaxf(y1,y);
         }
         if(x1<0||y1<0||x0>=640||y0>=480)continue;
@@ -252,6 +274,7 @@ bool qvr_aim(V3 o,V3 d,float *nx,float *ny,V3 *hit){
         float t=(-2.5f-o.z)/d.z;if(t<0)return false;
         *hit=add(o,mul(d,t));camera=qvr_flat_view?(Camera){500,320,240}:flat_camera;
     }
+    camera=effective_camera(camera);
     *nx=(camera.cx+camera.focal*hit->x/-hit->z)/640;
     *ny=(camera.cy-camera.focal*hit->y/-hit->z)/480;
     return *nx>0&&*nx<1&&*ny>0&&*ny<1;

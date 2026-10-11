@@ -22,6 +22,9 @@ bool qvr_sprite_corners(const sprite_item *item,int slot,float out[4][4]);
 bool qvr_flat_camera(float *cx,float *cy,float *focal);
 bool qvr_aim(V3 origin,V3 direction,float *nx,float *ny,V3 *hit);
 #ifdef TCVR_STEAM_FRAME
+extern float qvr_gameplay_scale,qvr_outside_darkening;
+/* Read-only config load preserves all other keys; repaired values are in memory. */
+void qvr_display_config(FILE *file);
 unsigned qvr_scene_frame_number(void);
 void qvr_sprite_report_arm(bool enabled);
 /* Record the mixer's renderer inputs only while the one-shot scene report is armed. */
