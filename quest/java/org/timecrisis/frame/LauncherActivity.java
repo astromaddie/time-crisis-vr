@@ -14,7 +14,6 @@ import java.util.Map;
 /** Small 2D setup step; the user supplies a ZIP at the fixed persistent location. */
 public final class LauncherActivity extends Activity {
     private TextView status;
-    private org.timecrisis.quest.CoopSessionController session;
     private Button retry, storage;
 
     @Override public void onCreate(Bundle state) {
@@ -46,14 +45,6 @@ public final class LauncherActivity extends Activity {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         finish();
     }
-    @Override public void onBackPressed() {
-        if (session != null) session.back(); else super.onBackPressed();
-    }
-    @Override protected void onDestroy() {
-        if (session != null) session.destroy();
-        super.onDestroy();
-    }
-
     private void prepare() {
         retry.setEnabled(false); storage.setVisibility(android.view.View.GONE);
         status.setText("Checking persistent game files in /sdcard/Documents/TimeCrisisVR…");
@@ -63,13 +54,8 @@ public final class LauncherActivity extends Activity {
                 FrameStorage.prepareRoms(FrameStorage.ROOT, expected);
                 runOnUiThread(() -> {
                     if (isFinishing() || isDestroyed()) return;
-                    if (new File(FrameStorage.ROOT,"vrdiag.once").isFile()) {
-                        org.timecrisis.quest.CoopLobbyBridge.selectSolo();
-                        launchGame();
-                    } else {
-                        session = new org.timecrisis.quest.CoopSessionController(this,true,
-                                FrameStorage.roms(FrameStorage.ROOT),this::launchGame);
-                    }
+                    // Lepton must enter OpenXR before displaying session choices.
+                    launchGame();
                 });
             } catch (Exception e) {
                 String detail = e.getMessage() == null ? e.toString() : e.getMessage();

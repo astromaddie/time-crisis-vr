@@ -29,6 +29,26 @@ static void text(int x,int y,const char *s,uint8_t r,uint8_t g,uint8_t b){
         }
     }
 }
+static const QLobbyView *lobby_panel;
+static QLobbyView last_lobby;
+static bool was_lobby;
+static void lobby_text(int x,int y,const char *label,int r,int g,int b){
+    char upper[80];snprintf(upper,sizeof upper,"%s",label);
+    for(char *c=upper;*c;c++)if(*c>='a'&&*c<='z')*c-=32;
+    text(x,y,upper,r,g,b);
+}
+static void lobby_pixels(const QLobbyView *lobby){
+    lobby_text(24,20,lobby->title,181,207,220);
+    for(int i=0;i<3;i++)lobby_text(24,62+i*24,lobby->status[i],225,235,240);
+    for(int i=0;i<lobby->count;i++){
+        const QLobbyButton *b=&lobby->buttons[i];bool selected=i==lobby->selected;
+        for(int y=b->y;y<b->y+b->h;y++)for(int x=b->x;x<b->x+b->w;x++){
+            uint8_t *p=pixels+(y*WIDTH+x)*4;p[0]=selected?35:23;p[1]=selected?100:40;p[2]=selected?125:51;p[3]=255;
+        }
+        lobby_text(b->x+12,b->y+14,b->label,b->enabled?255:130,b->enabled?255:145,b->enabled?255:155);
+    }
+    text(24,438,"STICK:MOVE A/TRIGGER:SELECT B:BACK",181,207,220);
+}
 static void panel(bool laser,bool physical_crouch,bool left_handed,bool frame_profile_active,int gun_pitch,bool saved,const char *session_status,bool session_failed){
 #ifndef TCVR_STEAM_FRAME
     (void)frame_profile_active;
@@ -37,6 +57,7 @@ static void panel(bool laser,bool physical_crouch,bool left_handed,bool frame_pr
         uint8_t *p=pixels+(y*WIDTH+x)*4;bool border=x<2||x>=WIDTH-2||y<2||y>=HEIGHT-2;
         p[0]=border?54:12;p[1]=border?183:19;p[2]=border?207:29;p[3]=border?255:240;
     }
+    if(lobby_panel){lobby_pixels(lobby_panel);return;}
     text(24,20,"PAUSE / OPTIONS",181,207,220);
     text(24,54,left_handed?"DEFAULT HAND: LEFT":"DEFAULT HAND: RIGHT",255,255,255);
     text(24,78,"RIGHT STICK CLICK: CHANGE DEFAULT",181,207,220);
@@ -123,6 +144,7 @@ bool qui_init(void){
 }
 void qui_draw(const float view[16],const float projection[16],V3 head,Q4 rotation,bool laser,bool physical_crouch,bool left_handed,bool frame_profile_active,int gun_pitch,bool saved,const char *session_status,bool session_failed){
     if(!program)return;
+    if(!lobby_panel&&was_lobby){last_state=-1;was_lobby=false;}
     if(!session_status)session_status="";
     GLint bound,unit;glGetIntegerv(GL_ACTIVE_TEXTURE,&unit);glActiveTexture(GL_TEXTURE0);glGetIntegerv(GL_TEXTURE_BINDING_2D,&bound);glBindTexture(GL_TEXTURE_2D,texture);
     int state=(physical_crouch?1:0)|(laser?2:0)|(saved?4:0)|(left_handed?8:0)|(frame_profile_active?16:0);
@@ -151,3 +173,26 @@ bool qui_capture_ppm(const char *path){
     if(fclose(f))ok=false;return ok;
 }
 void qui_shutdown(void){glDeleteProgram(program);glDeleteVertexArrays(1,&vao);glDeleteBuffers(1,&vbo);glDeleteTextures(1,&texture);program=vao=vbo=texture=0;last_state=-1;last_session_status[0]=0;last_session_failed=false;}
+
+void qui_lobby_draw(const float view[16],const float projection[16],V3 anchor,Q4 rotation,const QLobbyView *lobby){
+    if(!was_lobby||memcmp(&last_lobby,lobby,sizeof *lobby)){last_state=-1;last_lobby=*lobby;}
+    lobby_panel=lobby;was_lobby=true;
+    qui_draw(view,projection,anchor,rotation,false,false,false,true,0,true,"",false);
+    lobby_panel=NULL;
+}
+
+/* The dot is drawn after panel and beam, with depth disabled. Its entire
+ * footprint stays visible on top of the menu, including button edges. */
+void qui_lobby_cursor(const float view[16],const float projection[16],V3 hit,Q4 rotation){
+    float vertices[36][5];
+    for(int i=0;i<12;i++)for(int j=0;j<3;j++){
+        float a=(i+(j==2?1:0))*6.2831853f/12;V3 offset=j?rotate(rotation,v3(cosf(a)*.009f,sinf(a)*.009f,0)):v3(0,0,0);
+        V3 p=add(hit,offset);int k=i*3+j;vertices[k][0]=p.x;vertices[k][1]=p.y;vertices[k][2]=p.z;vertices[k][3]=vertices[k][4]=0;
+    }
+    GLint unit,bound;glGetIntegerv(GL_ACTIVE_TEXTURE,&unit);glActiveTexture(GL_TEXTURE0);glGetIntegerv(GL_TEXTURE_BINDING_2D,&bound);glBindTexture(GL_TEXTURE_2D,texture);
+    glDisable(GL_DEPTH_TEST);glDisable(GL_CULL_FACE);glDisable(GL_BLEND);glUseProgram(program);
+    glUniformMatrix4fv(u_view,1,GL_FALSE,view);glUniformMatrix4fv(u_projection,1,GL_FALSE,projection);glUniform1i(u_texture,0);
+    glBindVertexArray(vao);glBindBuffer(GL_ARRAY_BUFFER,vbo);glBufferData(GL_ARRAY_BUFFER,sizeof vertices,vertices,GL_STREAM_DRAW);
+    glEnableVertexAttribArray(0);glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,5*sizeof(float),0);glEnableVertexAttribArray(1);glVertexAttribPointer(1,2,GL_FLOAT,GL_FALSE,5*sizeof(float),(void*)(3*sizeof(float)));
+    glDrawArrays(GL_TRIANGLES,0,36);glBindTexture(GL_TEXTURE_2D,bound);glActiveTexture(unit);
+}

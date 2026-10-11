@@ -8,6 +8,7 @@
 #include "quest_coop.h"
 #ifdef TCVR_STEAM_FRAME
 #include "frame_replay.h"
+#include "frame_lobby.h"
 #endif
 int tc_game_main(int,char**);
 int SDL_main(int argc,char **argv) {
@@ -22,6 +23,14 @@ int SDL_main(int argc,char **argv) {
 #else
     const char *dir=SDL_AndroidGetInternalStoragePath();
     if(!dir||chdir(dir))return 2;
+#endif
+#ifdef TCVR_STEAM_FRAME
+    /* Always enter OpenXR for normal Steam launches. Diagnostics retain their
+     * unattended path; ordinary launch never depends on a diagnostic file. */
+    if(access("vrdiag.once",F_OK)!=0){
+        freopen("timecris-vr-launch.log","w",stderr);setvbuf(stderr,NULL,_IOLBF,0);
+        if(!qframe_lobby_run())return 2;
+    }
 #endif
     bool cooperative=qcoop_requested();
 #ifdef TCVR_STEAM_FRAME

@@ -585,6 +585,30 @@ int main(void){
     frame_profile_supported=true;
 #endif
     assert(actions_init());assert(space_count==4&&action_count==13);
+    /* Real production lobby input path: no game/options input leaks. */
+    focused=running=origin_set=true;options.gun_pitch=-15;
+    qlobby_begin();in_lobby=true;lobby_anchored=false;tick();
+    assert(qlobby_view()->count==3&&!qlobby_done());
+    stick_y=-1;tick();assert(qlobby_view()->selected==1);
+    tick();assert(qlobby_view()->selected==1); /* held stick does not repeat */
+    stick_y=0;tick();
+    click(lower_action,RIGHT_HAND);for(int i=0;i<100&&!qcoop_requested();i++){usleep(1000);qlobby_poll();}qlobby_poll();assert(qcoop_requested());
+    assert(!qlobby_view()->buttons[0].enabled&&!qlobby_done());
+    click(upper_action,RIGHT_HAND);for(int i=0;i<100&&qcoop_requested();i++){usleep(1000);qlobby_poll();}qlobby_poll();assert(!qcoop_requested());
+    assert(!strcmp(qlobby_view()->title,"TIME CRISIS VR"));
+    assert(options.gun_pitch==-15&&coin_frames==0&&!trigger&&!pedal&&!paused);
+    focused=false;tick();buttons[id(lower_action)][RIGHT_HAND]=true;
+    focused=true;tick();assert(!qlobby_done()); /* focus regain cannot confirm a held A */
+    buttons[id(lower_action)][RIGHT_HAND]=false;tick();click(lower_action,RIGHT_HAND);
+    for(int i=0;i<100&&!qlobby_done();i++){usleep(1000);qlobby_poll();}
+    assert(qlobby_done()&&!qcoop_requested());
+    qlobby_close();in_lobby=false;reset_input_edges();options.gun_pitch=0;
+    lobby_game_release=true;triggers[RIGHT_HAND]=1;grips[RIGHT_HAND]=1;tick();
+    assert(!trigger&&!pedal&&lobby_game_release);
+    triggers[RIGHT_HAND]=grips[RIGHT_HAND]=0;tick();assert(!lobby_game_release&&!trigger&&!pedal);
+
+    puts("PASS: native Frame lobby uses real OpenXR A/B/stick input, gates start, isolates settings/game input and rearms after focus loss");
+
 #ifdef TCVR_FRAME_PROFILE_UNSUPPORTED
     assert(!frame_profile_supported&&profile_counts[0]==0&&profile_counts[1]==18&&profile_counts[2]==0);
     assert(!strcmp(profile_names[1],"/interaction_profiles/oculus/touch_controller"));
