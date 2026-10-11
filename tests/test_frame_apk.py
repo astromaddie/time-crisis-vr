@@ -23,6 +23,7 @@ receipt = json.loads(receipt_path.read_text())
 
 assert receipt['package'] == 'org.timecrisis.frame'
 assert receipt['abi'] == 'arm64-v8a' and receipt['roms_bundled'] is False
+assert 'coop_identity' not in receipt, 'solo build receipt retained a stale multiplayer identity'
 assert receipt['sha256'] == hashlib.sha256(apk.read_bytes()).hexdigest()
 assert 'rom_sha256' not in receipt
 assert receipt['upstream'] == '6aaa90b4cbc7a23733e1c9f5f9a5e772a19fe23d'
@@ -69,6 +70,7 @@ with zipfile.ZipFile(apk) as archive:
     dex = archive.read('classes.dex')
     assert b'org/timecrisis/frame/MainActivity' in dex
     assert b'org/timecrisis/frame/LauncherActivity' in dex
+    assert b'org/timecrisis/quest/Coop' not in dex, 'stale multiplayer Java classes leaked into the solo APK'
 
 aapt2 = BUILD_TOOLS/'aapt2'
 badging = subprocess.check_output([aapt2, 'dump', 'badging', apk], text=True)

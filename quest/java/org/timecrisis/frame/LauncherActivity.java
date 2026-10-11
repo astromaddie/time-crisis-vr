@@ -37,14 +37,6 @@ public final class LauncherActivity extends Activity {
         }
     }
 
-    private void launchGame() {
-        startActivity(new Intent(this, MainActivity.class)
-                .setAction(Intent.ACTION_MAIN)
-                .addCategory("org.khronos.openxr.intent.category.IMMERSIVE_HMD")
-                .putExtra("org.timecrisis.COOP_PREPARED",true)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-        finish();
-    }
     private void prepare() {
         retry.setEnabled(false); storage.setVisibility(android.view.View.GONE);
         status.setText("Checking persistent game files in /sdcard/Documents/TimeCrisisVR…");
@@ -54,8 +46,11 @@ public final class LauncherActivity extends Activity {
                 FrameStorage.prepareRoms(FrameStorage.ROOT, expected);
                 runOnUiThread(() -> {
                     if (isFinishing() || isDestroyed()) return;
-                    // Lepton must enter OpenXR before displaying session choices.
-                    launchGame();
+                    startActivity(new Intent(this, MainActivity.class)
+                            .setAction(Intent.ACTION_MAIN)
+                            .addCategory("org.khronos.openxr.intent.category.IMMERSIVE_HMD")
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                    finish();
                 });
             } catch (Exception e) {
                 String detail = e.getMessage() == null ? e.toString() : e.getMessage();

@@ -9,7 +9,6 @@ I've played the solo version on my Frame at **2160×2160 per eye with SteamVR se
 ## What this fork adds
 
 - Standalone Frame support, with its own Android package, OpenXR loader and controller bindings.
-- A native VR startup lobby.
 - A larger gameplay window: the default is 60% wider and taller than the original port's view, filling more of the lenses without changing the headset's field of view.
 - A full cyan frame around the original arcade view, with the scenery outside it darkened by 65%. It makes the intended shooting area easier to see while keeping the game and HUD bright.
 - Corrected depth for world effects such as the opening train's crate explosions, so they sit with the scenery instead of floating over it.
@@ -20,7 +19,7 @@ I've played the solo version on my Frame at **2160×2160 per eye with SteamVR se
 
 The original VR port supplies the reconstructed stereo world, gun rendering and arcade gameplay. The arcade simulation keeps its original rate of about 60 Hz while the headset follows SteamVR's display rate.
 
-LAN co-op is a work in progress and is being moved to a separate development branch. The gameplay notes here are for solo play. See the [co-op notes](docs/LAN-COOP.md) for details.
+This `steam-frame` branch starts the solo game directly after ROM setup. Incomplete multiplayer work is kept on the separate `steam-frame-multiplayer` branch; it is not included in this build. The [multiplayer branch note](docs/LAN-COOP.md) records the paired-play result and the acceptance requirements for that work.
 
 ## Controls
 

@@ -30,8 +30,7 @@ base = [str(COMPILER), '-std=c11', '-O1', '-g', '-Wall', '-Wextra',
         '-idirafter', str(NDK/'sysroot/usr/include/aarch64-linux-android'),
         '-idirafter', str(NDK/'sysroot/usr/include'),
         str(ROOT/'tests/handedness_fixture.c'), str(ROOT/'quest/quest_options.c'),
-        str(ROOT/'quest/quest_cover.c'), str(ROOT/'quest/quest_coop.c'), str(ROOT/'quest/frame_lobby.c'),
-        '-Wl,-dead_strip', '-lm', '-pthread']
+        str(ROOT/'quest/quest_cover.c'), '-Wl,-dead_strip', '-lm']
 
 with tempfile.TemporaryDirectory(prefix='tcvr-controls-') as directory:
     modes = [

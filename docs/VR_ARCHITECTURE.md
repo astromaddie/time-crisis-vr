@@ -1,17 +1,5 @@
 # Steam Frame VR port status
 
-## Frame–Quest LAN co-op status
-
-The source now contains a ROM-free local LAN co-op path shared by the Steam Frame and Quest 3 targets. The Frame host owns P1, the joining headset supplies P2, and both advance the same fresh session through a canonical per-`rr_frame` input stream. The paused panel surfaces shared pause and connection errors. See [LAN-COOP.md](LAN-COOP.md) for the launcher contract, rules, ports, paired build commands, host regression coverage, and outstanding acceptance limits.
-
-| Co-op acceptance | Evidence/status |
-|---|---|
-| TCP/UDP lobby, compatibility, start barrier, tick ordering and input arbitration | host socket and production-path regressions; headset transport remains unverified |
-| Quest and Frame ROM-free source/package pair | build receipts must share the simulation and 31-chip ROM identity; renderer and package hashes intentionally differ |
-| In-game pause/error notice | production CPU-rasterizer capture for both target profiles; worn readability unverified |
-| Actual emulation parity and cross-headset game-state determinism | unverified; no gameplay fingerprint comparison or worn co-op run has been completed |
-| Lobby navigation and direct-IP workflow | Java compile/source path only; headset interaction unverified |
-
 The [README](../README.md) covers the current features, controls and confirmed play results. The detailed checks and measurements below retain their original development context.
 
 This branch adds a ROM-free, ARM64 Steam Frame build of the existing Quest OpenXR/GLES3 port. The Frame code is opt-in with `TCVR_STEAM_FRAME`; the default CMake and manifest paths remain the Quest build. The package id is `org.timecrisis.frame`. Its immersive activity uses Khronos OpenXR launch metadata and includes the Android OpenXR loader. It does not declare Meta device features.

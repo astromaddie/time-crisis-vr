@@ -208,35 +208,8 @@ static size_t spr_cache_bytes;'''),
     edit('engine/ss22_run.c', [
         ('#include "ss22_host.h"', '#include "ss22_host.h"\n#ifdef TCVR_STEAM_FRAME\n#include "frame_replay.h"\n#endif'),
         ('            rep_read();\n        }\n        return;\n    }\n    if (start_name', '            rep_read();\n        }\n#ifdef TCVR_STEAM_FRAME\n        extern void ss22_frame_replay_tick(uint32_t rr_frame);\n        ss22_frame_replay_tick(rr_frame);\n#endif\n        return;\n    }\n    if (start_name'),
-        ('    if (win_scale) ss22_eeprom_persist(nvfile);         /* a player\'s session keeps its options and records; headless runs (the gates) never do */', '#ifdef TCVR\n    ss22_eeprom_set_writable(true);\n#endif\n#ifdef TCVR_STEAM_FRAME\n    if (win_scale && tcvr_frame_replay_eeprom_persist_allowed(rep_path != NULL)) ss22_eeprom_persist(nvfile);\n#else\n    if (win_scale) ss22_eeprom_persist(nvfile);         /* a player\'s session keeps its options and records; headless runs (the gates) never do */\n#endif'),
+        ('    if (win_scale) ss22_eeprom_persist(nvfile);         /* a player\'s session keeps its options and records; headless runs (the gates) never do */', '#ifdef TCVR_STEAM_FRAME\n    if (win_scale && tcvr_frame_replay_eeprom_persist_allowed(rep_path != NULL)) ss22_eeprom_persist(nvfile);\n#else\n    if (win_scale) ss22_eeprom_persist(nvfile);         /* a player\'s session keeps its options and records; headless runs (the gates) never do */\n#endif'),
     ], marker='TCVR_FRAME_REPLAY_SAFE')
-
-    edit('engine/ss22_board.c', [
-        ('static bool    nv_on;', 'static bool    nv_on;\nstatic bool    nv_writable = true;'),
-        ('void ss22_eeprom_save(void)\n{\n    if (!nv_on || !memcmp(nv_saved, g_ss22.eeprom, SS22_EEPROM_SIZE)) return;', 'void ss22_eeprom_set_writable(bool writable) { nv_writable = writable; }\n\nvoid ss22_eeprom_save(void)\n{\n    if (!nv_on || !nv_writable || !memcmp(nv_saved, g_ss22.eeprom, SS22_EEPROM_SIZE)) return;'),
-    ], marker='TCVR_COOP_EEPROM_GUARD')
-    edit('engine/ss22_board.h', [
-        ('void ss22_eeprom_save(void);', 'void ss22_eeprom_save(void);\nvoid ss22_eeprom_set_writable(bool writable);'),
-    ], marker='TCVR_COOP_EEPROM_API')
-    edit('engine/ss22_run.c', [
-        ('#include "ss22_host.h"', '#include "ss22_host.h"\n#ifdef TCVR\n#include "quest_coop.h"\n#endif'),
-        ('        else rom_dir = argv[i];\n    }\n    /* First run:', '        else rom_dir = argv[i];\n    }\n#ifdef TCVR\n    if (qcoop_requested() && !qcoop_launch_arguments_supported(argc,argv)) { qcoop_report_error("Co-op supports a fresh normal run only; diagnostic, replay, and input override options are not allowed."); return 2; }\n#endif\n    /* First run:'),
-        ('    if (rep_path && !rep_open(rep_path)) return 2;       /* the recording\'s EEPROM replaces whatever was loaded */', '''#ifdef TCVR
-    bool diagnostics_pending=false;
-#ifdef TCVR_STEAM_FRAME
-    diagnostics_pending=qcoop_frame_diagnostics_pending();
-#endif
-    int coop_boot=qcoop_engine_boot(g_ss22.eeprom,SS22_EEPROM_SIZE,rep_path!=NULL,diagnostics_pending);
-    if (coop_boot<0) return 2;
-    if (coop_boot>0 && qcoop_is_client()) ss22_eeprom_set_writable(false);
-#endif
-    if (rep_path && !rep_open(rep_path)) return 2;       /* the recording\'s EEPROM replaces whatever was loaded */'''),
-        ('    if (win_scale && !rec_path && !rep_path) { snprintf(last_rec, sizeof last_rec, "%s_last.rec", g->lname); rec_path = last_rec; }', '''#ifdef TCVR
-    if (win_scale && !rec_path && !rep_path && !qcoop_requested()) { snprintf(last_rec, sizeof last_rec, "%s_last.rec", g->lname); rec_path = last_rec; }
-#else
-    if (win_scale && !rec_path && !rep_path) { snprintf(last_rec, sizeof last_rec, "%s_last.rec", g->lname); rec_path = last_rec; }
-#endif'''),
-    ], marker='TCVR_COOP_LOCKSTEP')
 
 if __name__ == '__main__':
     main()

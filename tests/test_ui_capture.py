@@ -17,15 +17,13 @@ if not COMPILER.is_file():
     raise SystemExit('clang is required on PATH for this host syntax test')
 
 with tempfile.TemporaryDirectory(prefix='tcvr-ui-capture-') as directory:
-    for profile, defines in (('quest', []), ('frame', ['-DTCVR_STEAM_FRAME'])):
-        output = Path(directory)/f'hud-capture-{profile}'
-        image = Path(directory)/f'hud-{profile}.ppm'
-        notice = Path(directory)/f'lan-notice-{profile}.ppm'
-        command = [str(COMPILER), '-std=c11', '-O1', '-ffunction-sections', '-fdata-sections',
-                   *defines, '-I'+str(ROOT/'quest'), '-I'+str(ROOT/'quest/include'), '-I'+str(ROOT/'upstream/include'),
-                   '-idirafter', str(NDK_HEADERS/'aarch64-linux-android'),
-                   '-idirafter', str(NDK_HEADERS), str(ROOT/'tests/ui_capture_fixture.c'),
-                   '-Wl,-dead_strip', '-o', str(output)]
-        subprocess.run(command, cwd=ROOT, check=True)
-        subprocess.run([output, image, notice], check=True)
-print('PASS: Quest and Frame production HUD captures preserve PPM row order, readable LAN status, and non-overlapping help')
+    output = Path(directory)/'hud-capture-test'
+    image = Path(directory)/'hud.ppm'
+    command = [str(COMPILER), '-std=c11', '-O1', '-ffunction-sections', '-fdata-sections',
+               '-I'+str(ROOT/'quest'), '-I'+str(ROOT/'quest/include'), '-I'+str(ROOT/'upstream/include'),
+               '-idirafter', str(NDK_HEADERS/'aarch64-linux-android'),
+               '-idirafter', str(NDK_HEADERS), str(ROOT/'tests/ui_capture_fixture.c'),
+               '-Wl,-dead_strip', '-o', str(output)]
+    subprocess.run(command, cwd=ROOT, check=True)
+    subprocess.run([output, image], check=True)
+print('PASS: production HUD PPM capture writes the CPU top row first and bottom row last')

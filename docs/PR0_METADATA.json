@@ -3,7 +3,7 @@
   "milestone": "PR0",
   "status": "EXPERIMENTAL",
   "publication_status": "public experimental source; no binary release",
-  "tested_commit": "a3586d7117507085cdf167ca2190e9fee503d3fe",
+  "tested_commit": null,
   "supported_targets": [
     "Steam Frame Lepton / Android ARM64 / SteamVR OpenXR"
   ],
@@ -12,11 +12,13 @@
     "source_worktree_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "upstream_submodule_commit": "6aaa90b4cbc7a23733e1c9f5f9a5e772a19fe23d",
     "generated_upstream_tree_sha256": "43cb98b644f0bf1b30a1d264e6deafac300d1ba626ffaef31d7f94f1a7156c59",
-    "patch_script_sha256": "d59ed95efe32a7ed1a9bb200c21cf417db46074a50c45cf9a70fa9322365ee9b"
+    "patch_script_sha256": "d59ed95efe32a7ed1a9bb200c21cf417db46074a50c45cf9a70fa9322365ee9b",
+    "source_branch": "steam-frame-multiplayer",
+    "source_scope": "Historical multiplayer-branch build; it does not identify the current solo source."
   },
   "validation": {
     "full_build_command": "./Build-Steam-Frame.sh --rom <separately supplied ROM ZIP> --jobs 4",
-    "full_build_result": "PASS; fresh checkout at full_build_source_commit and pinned submodule built a complete ARM64 APK. No ROM hash was recorded.",
+    "full_build_result": "Historical PASS for the multiplayer-branch source commit recorded below; this is not a build of the restored solo source.",
     "toolchain": {
       "python": "3.14.6",
       "jdk": "OpenJDK 17.0.20.1",
@@ -54,22 +56,15 @@
       "archive_integrity": "unzip -t passed"
     },
     "host_checks_passed": [
-      "python3 tests/test_frame_apk.py",
-      "python3 tests/test_frame_installer.py",
-      "python3 tests/test_frame_native_syntax.py (after the test-only macOS path fix)",
-      "python3 tests/test_frame_replay.py",
-      "python3 tests/test_play_area.py",
+      "python3 tests/test_solo_startup.py",
       "python3 tests/test_portable_controls.py",
-      "python3 tests/test_portable_import.py",
       "python3 tests/test_sprite_report.py",
+      "python3 tests/test_play_area.py",
+      "python3 tests/test_frame_replay.py",
+      "python3 tests/test_portable_import.py",
       "python3 tests/test_ui_capture.py",
       "python3 tests/test_patches.py",
-      "python3 tests/test_coop_identity.py",
-      "python3 tests/test_coop_manifest.py",
-      "python3 tests/test_coop_persistence.py",
-      "python3 tests/test_coop_recordings.py",
-      "python3 tests/test_sdl_clipboard_patch.py",
-      "tests/test_coop_clock.c, tests/test_coop_lan.c, tests/test_coop_stall.c compiled against production quest/quest_coop.c and passed"
+      "python3 tests/test_frame_native_syntax.py"
     ],
     "platform_checks_not_passed": {
       "windows_tooling_or_powershell": [
@@ -91,24 +86,20 @@
     },
     "test_only_change": "tests/test_frame_native_syntax.py now resolves compiler source paths before matching, handling macOS /tmp canonicalization. The APK build used the unmodified production source at full_build_source_commit.",
     "full_build_source_commit": "d662948d098c57122a24a7333126097fcb778a9c",
-    "latest_host_validation": {
-      "source_commit": "a3586d7117507085cdf167ca2190e9fee503d3fe",
+    "current_solo_build": "Pending a fresh Frame package from the restored solo source.",
+    "current_solo_validation": {
       "commands": [
-        "python3 tests/test_frame_lobby_focus.py",
+        "python3 tests/test_solo_startup.py",
         "python3 tests/test_portable_controls.py",
+        "python3 tests/test_sprite_report.py",
+        "python3 tests/test_play_area.py",
+        "python3 tests/test_frame_replay.py",
+        "python3 tests/test_portable_import.py",
+        "python3 tests/test_ui_capture.py",
+        "python3 tests/test_patches.py",
         "python3 tests/test_frame_native_syntax.py"
       ],
-      "result": "PASS; production XR focus events exercise the real SS22 input backend under AddressSanitizer/UndefinedBehaviorSanitizer before and after game attachment. Existing controls, replay neutralization and Quest/Frame native syntax checks also passed.",
-      "warning": "The existing unused graphics_ready label warning remains."
-    },
-    "prior_lobby_host_validation": {
-      "source_commit": "f1ae4709e9cb32575c8d1925f1ce14dbe5d8db8c",
-      "commands": [
-        "python3 tests/test_frame_lobby.py",
-        "python3 tests/test_portable_controls.py",
-        "python3 tests/test_frame_native_syntax.py"
-      ],
-      "result": "PASS; native lobby and loopback LAN handshake, production controls, and Quest/Frame native syntax checks. Localhost socket permission was required for the lobby check."
+      "result": "PASS: production Frame launcher/native game entry, controls, timing/projection/aiming, guide geometry, replay, ROM import, HUD capture, patch reproducibility and Quest/Frame syntax after refreshing the pinned generated view. APK verification awaits the fresh solo build."
     }
   },
   "runtime_observation": "User confirmed actual Steam gameplay at 2160 resolution and 120 Hz using the larger window. This is not a sustained frame-time measurement.",
@@ -117,14 +108,15 @@
     "An earlier rear-facing view check recorded a black image; not retested in this build check."
   ],
   "source_publication_rights": "Port and pinned reconstruction source retain their original MIT notices. The repository includes generated C source, not a ROM archive or extracted game media. Source notices do not grant rights to the original arcade ROM, graphics or audio.",
-  "binary_distribution": "Source-only publication; the recorded clean Frame APK excluded the ROM and was generated locally, then removed.",
+  "binary_distribution": "Source-only publication; the recorded APK belongs to the separate multiplayer branch and was removed. No solo APK has been built from the restored source yet.",
   "build_isolation": "Fresh checkout at immutable source commit; HOME pointed to an isolated temporary directory; system/global Git configuration and personal Git credentials disabled. The custom signing key was generated at the explicit temporary HOME and verified against the APK certificate. Public submodule, SDL and Khronos dependencies were fetched anonymously. No ROM hash, ROM file, APK, or signing key is in the repository or receipt.",
   "distribution_blockers": [],
   "publication_date": "2026-10-11",
   "multiplayer_status": {
     "status": "work in progress",
-    "branch": null,
-    "branch_separation": "move to a separate development branch in progress; destination name not yet recorded",
-    "gameplay_confirmation_scope": "solo play; no multiplayer readiness claim"
-  }
+    "branch": "steam-frame-multiplayer",
+    "branch_separation": "complete; multiplayer is excluded from steam-frame",
+    "gameplay_confirmation_scope": "solo play on steam-frame"
+  },
+  "tested_commit_note": "The current solo restoration is being validated before the coordinator creates its scoped commit."
 }

@@ -1,16 +1,14 @@
 # Changelog
 
-## 2026-10-11 — Experimental Steam Frame source prep
+## 2026-10-11 — Solo Steam Frame branch restored
 
-- Replaced the root landing page with the source build route; preserved the former README in docs/README_PRE_PR0.md.
-- Recorded the current clean ARM64 APK build, package checks, host-test outcomes and pinned-submodule source notices in docs/PR0_READINESS.md and docs/PR0_METADATA.json.
-- Made the native syntax test compare resolved compiler paths so a clean macOS checkout handles `/tmp` path canonicalization.
-- Removed personal machine defaults from the Frame build and install paths; ROM-free importer tests use a synthetic manifest and archive.
+- Removed the incomplete LAN backend and multiplayer launch lobby from `steam-frame`; multiplayer remains on `steam-frame-multiplayer`.
+- Restored direct solo startup while retaining the accepted Frame rendering, controls, storage and build behavior.
+- Recreated Java and dex output directories on packaging so stale lobby classes cannot enter an incremental solo APK.
+- Retained the compiler-path resolution fix for macOS `/tmp` canonicalization.
 
 ## 2026-10-11 — public source preparation
 
+- Replaced the root landing page with the source build route; preserved the former README in docs/README_PRE_PR0.md.
+- Recorded source publication, package-boundary and pinned-submodule notices in docs/PR0_READINESS.md and docs/PR0_METADATA.json.
 - Clarified the ROM-free Frame source/package boundary and retained the upstream reconstruction notice.
-
-- Fixed startup focus handling so the native lobby does not call the game input backend before it is initialized; added a real-backend sanitizer regression.
-
-- Marked multiplayer as work in progress being moved to a separate development branch; confirmed gameplay notes refer to solo play.

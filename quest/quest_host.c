@@ -33,14 +33,6 @@
 #include "quest_cover.h"
 #include "quest_clock.h"
 #include "quest_refresh.h"
-#include "quest_coop.h"
-#ifdef TCVR_STEAM_FRAME
-#include "frame_lobby.h"
-static bool in_lobby,lobby_anchored,lobby_game_release;
-static V3 lobby_anchor;
-static Q4 lobby_rotation;
-static bool lobby_stick_armed,lobby_trigger_armed,lobby_trigger_down;
-#endif
 #include "quest_ui.h"
 
 #ifdef TCVR_PC
@@ -71,7 +63,6 @@ static XrSessionState state;
 static bool running,quit,active,focused,paused,origin_set,recenter_requested,recenter_calibration_requested;
 static bool multiview;
 typedef struct ButtonEdge { bool synced,was; } ButtonEdge;
-static ButtonEdge lobby_confirm,lobby_back_button;
 static ButtonEdge coin_button,recenter_button,pause_button,laser_button,cover_button,hand_button,pitch_reset_button;
 typedef struct ViewHold { bool synced,down,ignored,did_recenter,did_calibrate;XrTime down_since; } ViewHold;
 static ViewHold view_hold;
@@ -109,11 +100,6 @@ static int coin_frames;
 static const ss22_host_game *host;
 static struct Eye { XrSwapchain chain;uint32_t w,h,n;QSwapchainImage *images;GLuint *fb,depth; } eyes[2];
 static double profile_parts[6],profile_thread;
-static bool simulation_tick_due(XrTime display_time){
-    if(!qcoop_requested())return qclock_take(&game_deadline,display_time);
-    if(!qclock_due(&game_deadline,display_time))return false;
-    return qclock_advance_if_ready(&game_deadline,qcoop_try_tick());
-}
 #ifdef TCVR_STEAM_FRAME
 typedef struct FrameDiagnostic {
     bool force_render,synthetic,synthetic_hands,autostart,autostart_started,colorprobe,dump_eyes,dump_hud,timing,pose_report,grip_anchor,sprite_report,replay;
@@ -364,9 +350,6 @@ static void reset_fire_input(void){
 }
 static void reset_pitch_input(void){pitch_armed=false;pitch_direction=0;pitch_repeat_time=0;}
 static void reset_input_edges(void){
-#ifdef TCVR_STEAM_FRAME
-    lobby_confirm=lobby_back_button=(ButtonEdge){0};lobby_stick_armed=lobby_trigger_armed=lobby_trigger_down=false;
-#endif
     coin_button=recenter_button=pause_button=laser_button=cover_button=hand_button=pitch_reset_button=(ButtonEdge){0};
     view_hold=(ViewHold){0};
     reset_pitch_input();
@@ -763,51 +746,6 @@ static void frame_diag_report_poses(FILE *out,XrTime time){
     }
 }
 #endif
-#ifdef TCVR_STEAM_FRAME
-static void lobby_input(XrTime time){
-    bool confirm=pressed(lower_action,hand_paths[RIGHT_HAND],&lobby_confirm);
-    bool back=pressed(upper_action,hand_paths[RIGHT_HAND],&lobby_back_button);
-    if(frame_profile_active){
-        bool held=view_hold.down,short_press=!view_hold.did_recenter;frame_view_button(time);
-        if(held&&!view_hold.down&&short_press)back=true;
-    }
-    XrActionStateGetInfo get={XR_TYPE_ACTION_STATE_GET_INFO};get.action=pitch_action;
-    XrActionStateVector2f stick={XR_TYPE_ACTION_STATE_VECTOR2F};
-    if(XR_SUCCEEDED(xrGetActionStateVector2f(session,&get,&stick))&&stick.isActive){
-        float x=stick.currentState.x,y=stick.currentState.y;
-        if(fabsf(x)<.25f&&fabsf(y)<.25f)lobby_stick_armed=true;
-        if(lobby_stick_armed&&(fabsf(x)>.65f||fabsf(y)>.65f)){
-            if(fabsf(x)>fabsf(y))qlobby_move(x>0?1:-1,0);else qlobby_move(0,y>0?-1:1);
-            lobby_stick_armed=false;
-        }
-    }else lobby_stick_armed=false;
-    int hand=options.left_handed?LEFT_HAND:RIGHT_HAND;
-    XrSpaceLocation loc={XR_TYPE_SPACE_LOCATION};get.action=aim_action;get.subactionPath=hand_paths[hand];
-    XrActionStatePose pose={XR_TYPE_ACTION_STATE_POSE};
-    XrSpaceLocationFlags valid=XR_SPACE_LOCATION_POSITION_VALID_BIT|XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
-    bool tracked=XR_SUCCEEDED(xrGetActionStatePose(session,&get,&pose))&&pose.isActive&&XR_SUCCEEDED(xrLocateSpace(aim_spaces[hand],local_space,time,&loc))&&(loc.locationFlags&valid)==valid;
-    bool hit=false;int pointer_x=0,pointer_y=0;
-    if(tracked&&lobby_anchored){
-        gun_origin=relative_position(loc.pose.position);V3 direction=rotate(relative_rotation(loc.pose.orientation),v3(0,0,-1));
-        V3 o=rotate(conjugate(lobby_rotation),sub(gun_origin,lobby_anchor));V3 d=rotate(conjugate(lobby_rotation),direction);
-        if(d.z<-.001f){float t=(-1.6f-o.z)/d.z;V3 p=add(o,mul(d,t));
-            if(t>0&&fabsf(p.x)<.65f&&fabsf(p.y)<.4875f){
-                hit=true;gun_hit=add(gun_origin,mul(direction,t));
-                /* Hover only after pointer motion, so a resting ray does not
-                 * steal selection from controller navigation. */
-                static int last_x=-100,last_y=-100;int x=(int)((p.x/.65f+1)*320),y=(int)((1-p.y/.4875f)*240);pointer_x=x;pointer_y=y;
-                if(abs(x-last_x)>2||abs(y-last_y)>2){qlobby_hover(x,y);last_x=x;last_y=y;}
-            }
-        }
-    }
-    aim_valid=hit;
-    XrActionStateFloat fire;bool available=axis_state(trigger_action,hand_paths[hand],&fire);
-    if(!available||!tracked){lobby_trigger_armed=lobby_trigger_down=false;}
-    else if(fire.currentState<.45f){lobby_trigger_down=false;lobby_trigger_armed=true;}
-    else if(fire.currentState>.6f&&lobby_trigger_armed&&!lobby_trigger_down){lobby_trigger_down=true;if(hit&&qlobby_hover(pointer_x,pointer_y))confirm=true;}
-    if(back)qlobby_back();else if(confirm)qlobby_select();
-}
-#endif
 static void sync_input(XrTime time,bool head_tracked,float head_y){
     trigger=pedal=0;aim_valid=gun_tracked=false;
 #ifdef TCVR_STEAM_FRAME
@@ -818,9 +756,6 @@ static void sync_input(XrTime time,bool head_tracked,float head_y){
     if(!focused){reset_input_edges();return;}
     XrActiveActionSet aset={action_set,XR_NULL_PATH};XrActionsSyncInfo sync={XR_TYPE_ACTIONS_SYNC_INFO};sync.countActiveActionSets=1;sync.activeActionSets=&aset;
     if(!XR(xrSyncActions(session,&sync))){reset_input_edges();return;}
-#ifdef TCVR_STEAM_FRAME
-    if(in_lobby){lobby_input(time);return;}
-#endif
     if(pressed(pause_action,XR_NULL_PATH,&pause_button)){paused=!paused;reset_fire_input();reset_pitch_input();game_deadline=0;eng_audio_set_volume(paused?0:100);ss22_input_neutral();}
     bool change_hand=pressed(hand_action,XR_NULL_PATH,&hand_button);
     if(paused&&change_hand){change_weapon_hand();return;}
@@ -868,15 +803,6 @@ static void sync_input(XrTime time,bool head_tracked,float head_y){
         if(options.physical_crouch)cover_calibration_pending=true;
         fprintf(stderr,"[OPTIONS] cover %s; saved %d\n",options.physical_crouch?"PHYSICAL":"GRIP",options_saved);
     }
-    }
-#endif
-#ifdef TCVR_STEAM_FRAME
-    if(lobby_game_release){
-        bool neutral=true;
-        for(int h=0;h<HAND_COUNT;h++)if(axis(trigger_action,hand_paths[h])>.2f||axis(grip_action,hand_paths[h])>.2f)neutral=false;
-        if(neutral)lobby_game_release=false;
-        if(qcoop_requested())qcoop_capture_local((QCoopInput){0});
-        return;
     }
 #endif
     if(!origin_set)return;
@@ -942,32 +868,12 @@ static void sync_input(XrTime time,bool head_tracked,float head_y){
 #ifdef TCVR_STEAM_FRAME
     frame_pose_report.samples_ready=frame_diag.pose_report;
 #endif
-    if(qcoop_requested()){
-        QCoopInput input={0};
-        input.trigger=trigger>.55f||shot_pending;
-        input.exposed=pedal>.55f;
-        input.aim_valid=aim_valid;
-        input.gun_x=(uint16_t)(68+fminf(1,fmaxf(0,nx))*626);
-        input.gun_y=(uint16_t)(43+fminf(1,fmaxf(0,ny))*241);
-        input.offscreen=!aim_valid;
-        input.coin=coin_frames>0&&(coin_frames%12)>5;
-        qcoop_capture_local(input);
-        /* qcoop_capture_local retains a one-frame edge until a simulation tick
-         * snapshots it, matching the solo recorder's short-tap guarantee. */
-        shot_pending=false;
-    }
 }
 
 /* Input tests compile the real action and polling code without a window/runtime. */
 #ifndef TCVR_INPUT_TEST
 bool ss22_host_open(const ss22_host_game *g,int scale,bool full){
     (void)scale;(void)full;host=g;
-#ifdef TCVR_STEAM_FRAME
-    if(active){
-        /* Attach the game to the XR session used by the launch lobby. */
-        eng_audio_set_gain(g->out_gain);eng_audio_open();g->snd_set_output(true);g->input_init();return true;
-    }
-#endif
     qoptions_load(options_path,&options);active_weapon_hand=options.left_handed?LEFT_HAND:RIGHT_HAND;
 #ifdef TCVR_STEAM_FRAME
     const char *options_menu="right Menu (Frame) / left Menu (Touch fallback)";
@@ -1154,7 +1060,7 @@ graphics_ready:
 #endif
     if(!qgun_init("models/player-gun.tcgun"))goto fail;
     if(!qui_init())goto fail;
-    ss22_gl_set_gun_flash(false);if(g){eng_audio_set_gain(g->out_gain);eng_audio_open();g->snd_set_output(true);g->input_init();}
+    ss22_gl_set_gun_flash(false);eng_audio_set_gain(g->out_gain);eng_audio_open();g->snd_set_output(true);g->input_init();
     active=true;fprintf(stderr,"[XR] Renderer initialized: %ux%u per eye; %s\n",eyes[0].w,eyes[0].h,glGetString(GL_RENDERER));return true;
 fail:
     fprintf(stderr,"[XR] initialization failed; SDL: %s\n",SDL_GetError());ss22_host_close();return false;
@@ -1182,10 +1088,7 @@ static bool desktop_frame(void){
         if((float)w/h>4.f/3.f){p[0]*=(float)vw/w;}else{p[5]*=(float)vh/h;}
         hud_camera();qgl_target(0,0);qgl_eye(v,p);ss22_draw(w,h);qgl_flush();
         if(options.laser_enabled&&aim_valid&&!paused){qgl_pointer(v3(.24f,-.24f,-.45f),v3((nx-.5f)*3.2f,(.5f-ny)*2.4f,-2.5f));qgl_flush();}
-        if(paused||qcoop_is_paused()){
-            char message[192];qcoop_copy_display_status(message,sizeof message);
-            qui_draw(v,p,v3(0,0,0),(Q4){0,0,0,1},options.laser_enabled,options.physical_crouch,options.left_handed,frame_profile_active,options.gun_pitch,options_saved,message,qcoop_is_failed());
-        }
+        if(paused)qui_draw(v,p,v3(0,0,0),(Q4){0,0,0,1},options.laser_enabled,options.physical_crouch,options.left_handed,frame_profile_active,options.gun_pitch,options_saved);
         const char *capture_frame=getenv("TCVR_CAPTURE_FRAME");
         if(capture_frame&&++frame_number==strtoul(capture_frame,NULL,10)){FILE *f=fopen("capture.request","w");if(f)fclose(f);}
         if(!access("capture.request",F_OK)){capture_eye(0,w,h);unlink("capture.request");}
@@ -1203,15 +1106,13 @@ bool ss22_host_frame(void){
     /* The original game runs at 59.906 Hz. Submit additional poses without advancing its CPU at headset refresh. */
     for(;;){
         if(!events())return false;
-        qcoop_set_local_ready(focused&&last_tracking&&!paused);
-        if(qcoop_requested())eng_audio_set_volume(paused||!focused||!last_tracking||qcoop_is_paused()?0:100);
         if(!running){SDL_Delay(10);continue;}
         bool diagnostic_force=false;
 #ifdef TCVR_STEAM_FRAME
         diagnostic_force=frame_diag.force_render;
 #endif
-        if(host&&game_deadline&&(focused||diagnostic_force)&&!paused&&last_tracking&&last_display_time>=game_deadline){
-            if(simulation_tick_due(last_display_time)){host->input_update();return true;}
+        if(game_deadline&&(focused||diagnostic_force)&&!paused&&last_tracking&&last_display_time>=game_deadline){
+            if(qclock_take(&game_deadline,last_display_time)){host->input_update();return true;}
         }
         XrFrameWaitInfo wi={XR_TYPE_FRAME_WAIT_INFO};XrFrameState frame={XR_TYPE_FRAME_STATE};if(!XR(xrWaitFrame(session,&wi,&frame)))return false;
 #ifndef TCVR_STEAM_FRAME
@@ -1235,7 +1136,6 @@ bool ss22_host_frame(void){
 #ifdef TCVR_STEAM_FRAME
         last_tracking=tracking&&(frame.shouldRender||diagnostic_force);
 #endif
-        qcoop_set_local_ready(focused&&last_tracking&&!paused);
         if(tracking&&(!origin_set||recenter_requested||diagnostic_views)){
             bool calibrate_cover=!origin_set||recenter_calibration_requested;
 #ifdef TCVR_STEAM_FRAME
@@ -1243,9 +1143,6 @@ bool ss22_host_frame(void){
             else
 #endif
             {origin=mul(add(vec(views[0].pose.position),vec(views[1].pose.position)),.5f);origin_rotation=yaw_only(quat(views[0].pose.orientation));origin_set=true;}
-#ifdef TCVR_STEAM_FRAME
-            if(in_lobby)lobby_anchored=false;
-#endif
             recenter_requested=false;
 #ifdef TCVR_STEAM_FRAME
             recenter_calibration_requested=false;
@@ -1263,7 +1160,6 @@ bool ss22_host_frame(void){
 #else
         sync_input(frame.predictedDisplayTime,head_tracked,(views[0].pose.position.y+views[1].pose.position.y)*.5f);
 #endif
-        qcoop_set_local_ready(focused&&last_tracking&&!paused);
         parts[0]+=wall_ms()-stage_start;
         float recoil=recoil_started?qgun_recoil((float)(SDL_GetTicks64()-recoil_started)):0;
         XrCompositionLayerProjectionView pv[2]={{XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW},{XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW}};
@@ -1283,15 +1179,9 @@ bool ss22_host_frame(void){
             view_matrix(v[i],relative_position(views[i].pose.position),relative_rotation(views[i].pose.orientation));
             projection(p[i],views[i].fov.angleLeft,views[i].fov.angleRight,views[i].fov.angleDown,views[i].fov.angleUp);
         }
-#ifdef TCVR_STEAM_FRAME
-        if(in_lobby){
-            qlobby_poll();
-            if(tracking&&!lobby_anchored){lobby_anchor=mul(add(relative_position(views[0].pose.position),relative_position(views[1].pose.position)),.5f);lobby_rotation=yaw_only(relative_rotation(views[0].pose.orientation));lobby_anchored=true;}
-        }else
-#endif
         hud_camera();
         bool stereo_frame=false;
-        if(host&&draw_frame&&multiview
+        if(draw_frame&&multiview
 #ifdef TCVR_STEAM_FRAME
            &&!color_probe
 #endif
@@ -1317,14 +1207,6 @@ bool ss22_host_frame(void){
             }else
 #endif
             {
-#ifdef TCVR_STEAM_FRAME
-            if(in_lobby){
-                glDisable(GL_SCISSOR_TEST);glColorMask(1,1,1,1);glClearColor(.015f,.025f,.04f,1);glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
-                qui_lobby_draw(v[i],p[i],lobby_anchor,lobby_rotation,qlobby_view());
-                if(aim_valid&&focused){qgl_eye(v[i],p[i]);qgl_pointer(gun_origin,gun_hit);qgl_flush();qui_lobby_cursor(v[i],p[i],gun_hit,lobby_rotation);}
-            }else
-#endif
-            {
             qgl_eye(v[i],p[i]);
             if(stereo_frame)qgl_stereo_blit(i);else ss22_draw(eye->w,eye->h);
 #ifdef TCVR_STEAM_FRAME
@@ -1333,14 +1215,11 @@ bool ss22_host_frame(void){
             if(options.laser_enabled&&focused&&aim_valid&&!paused)qgl_pointer(gun_origin,gun_hit);
             qgl_flush();
             }
-            }
             parts[2]+=wall_ms()-stage_start;stage_start=wall_ms();
-            if(host&&!color_probe&&(focused||diagnostic_force)&&gun_tracked)qgun_draw(v[i],p[i],gun_position,gun_rotation,recoil,trigger);
-            bool shared_notice=qcoop_is_paused();
-            if(host&&!color_probe&&((focused&&(paused||shared_notice))||dump_hud)){
+            if(!color_probe&&(focused||diagnostic_force)&&gun_tracked)qgun_draw(v[i],p[i],gun_position,gun_rotation,recoil,trigger);
+            if(!color_probe&&((focused&&paused)||dump_hud)){
                 V3 head=mul(add(relative_position(views[0].pose.position),relative_position(views[1].pose.position)),.5f);
-                char message[192];qcoop_copy_display_status(message,sizeof message);
-                qui_draw(v[i],p[i],head,relative_rotation(views[0].pose.orientation),options.laser_enabled,options.physical_crouch,options.left_handed,frame_profile_active,options.gun_pitch,options_saved,message,qcoop_is_failed());
+                qui_draw(v[i],p[i],head,relative_rotation(views[0].pose.orientation),options.laser_enabled,options.physical_crouch,options.left_handed,frame_profile_active,options.gun_pitch,options_saved);
             }
 #ifdef TCVR_STEAM_FRAME
             if(i==1&&dump_hud){mkdir("vr-dumps",0775);bool saved=qui_capture_ppm("vr-dumps/vr-hud.ppm");fprintf(stderr,"[vr] HUD dump %s\n",saved?"written":"failed");frame_diag.dump_hud=false;}
@@ -1373,9 +1252,6 @@ bool ss22_host_frame(void){
         stage_start=wall_ms();
         if(!XR(xrEndFrame(session,&end))||!frame_ok)return false;
         parts[5]+=wall_ms()-stage_start;
-#ifdef TCVR_STEAM_FRAME
-        if(in_lobby){if(qlobby_done())return true;continue;}
-#endif
         bool profile_active=draw_frame&&focused&&!paused;
 #ifdef TCVR_STEAM_FRAME
         if(diagnostic_force&&draw_frame&&!paused)profile_active=true;
@@ -1391,31 +1267,18 @@ bool ss22_host_frame(void){
 #ifdef TCVR_STEAM_FRAME
            ||!frame.shouldRender
 #endif
-        )&&!diagnostic_step){qcoop_set_local_ready(false);ss22_input_neutral();game_deadline=0;
+        )&&!diagnostic_step){ss22_input_neutral();game_deadline=0;
 #ifdef TCVR_STEAM_FRAME
             if(!focused||!frame.shouldRender){reset_input_edges();eng_audio_set_volume(0);}
 #endif
             continue;
         }
 #ifdef TCVR_STEAM_FRAME
-        eng_audio_set_volume(paused||!focused||qcoop_is_paused()?0:100);
+        eng_audio_set_volume(paused||!focused?0:100);
 #endif
-        if(simulation_tick_due(frame.predictedDisplayTime)){host->input_update();return true;}
+        if(qclock_take(&game_deadline,frame.predictedDisplayTime)){host->input_update();return true;}
     }
 }
-#ifdef TCVR_STEAM_FRAME
-bool qframe_lobby_run(void){
-    in_lobby=true;lobby_anchored=false;
-    qlobby_begin();
-    if(!ss22_host_open(NULL,1,false)){qlobby_close();in_lobby=false;return false;}
-    fprintf(stderr,"[vr] native launch lobby ready: Solo / Host / Join\n");
-    bool ok=ss22_host_frame();
-    qlobby_close();in_lobby=false;lobby_game_release=ok;reset_input_edges();game_deadline=0;
-    if(!ok){qcoop_cancel(false);ss22_host_close();}
-    return ok;
-}
-#endif
-
 #endif
 void ss22_input_init(const ss22_input_game *g){(void)g;}
 #ifdef TCVR_STEAM_FRAME
@@ -1425,14 +1288,6 @@ void ss22_frame_replay_tick(uint32_t rr_frame){
 #endif
 void ss22_input_update(void){
     uint16_t bits=0;
-    if(qcoop_requested()){
-        QCoopTick tick={0};if(!qcoop_current_input(&tick))return;
-        bits=qcoop_to_arcade_bits(tick);
-        fire_output_down=tick.fire;g_ss22_gun_off=tick.offscreen;
-        g_ss22_gun_x=tick.gun_x;g_ss22_gun_y=tick.gun_y;
-        if(coin_frames)coin_frames--;
-        ss22_snd_inputs(bits,0x200,0,0);return;
-    }
 #ifdef TCVR_STEAM_FRAME
     frame_diag.input_ticks++;
 #endif
@@ -1469,9 +1324,6 @@ void ss22_input_update(void){
 void ss22_input_neutral(void){
     trigger=pedal=0;shot_pending=shot_needs_release=fire_output_down=false;
 #ifdef TCVR_STEAM_FRAME
-    /* The launch lobby receives real focus events before tc_game_main installs
-     * g_ss22_game. Clear local edges above, but do not touch its cabinet yet. */
-    if(in_lobby)return;
     /* Focus/options resets clear live edges, but replay owns the cabinet state. */
     if(frame_diag.replay)return;
 #endif
