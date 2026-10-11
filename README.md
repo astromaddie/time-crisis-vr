@@ -9,6 +9,7 @@ I've played it on my Frame at **2160×2160 per eye with SteamVR set to 120 Hz**.
 ## What this fork adds
 
 - Standalone Frame support, with its own Android package, OpenXR loader and controller bindings.
+- A native VR startup lobby with Solo, Host and Join options.
 - A larger gameplay window: the default is 60% wider and taller than the original port's view, filling more of the lenses without changing the headset's field of view.
 - A full cyan frame around the original arcade view, with the scenery outside it darkened by 65%. It makes the intended shooting area easier to see while keeping the game and HUD bright.
 - Corrected depth for world effects such as the opening train's crate explosions, so they sit with the scenery instead of floating over it.
@@ -79,4 +80,4 @@ The Android surface can crash during the diagnostic self-exit path. Normal play 
 
 DR-89 and contributors provide the original VR port. The reconstruction dependency is pinned at `6aaa90b4cbc7a23733e1c9f5f9a5e772a19fe23d`. Original notices are retained in [LICENSE](LICENSE), [NOTICE.md](NOTICE.md) and the dependency.
 
-The MIT notice for port code doesn't grant rights to Time Crisis's arcade program, ROM, graphics or sound. The reconstruction includes generated translations of commercial game code, whose distribution rights still need review before a public release. See [the rights record](docs/PR0_READINESS.md). The [architecture notes](docs/VR_ARCHITECTURE.md) hold the implementation and performance history.
+The MIT notice for port code doesn't grant rights to Time Crisis's arcade program, ROM, graphics or sound. The source includes the upstream reconstruction and keeps its MIT notice. ROM dumps and game media aren't included. See [the build and publication record](docs/PR0_READINESS.md). The [architecture notes](docs/VR_ARCHITECTURE.md) hold the implementation and performance history.

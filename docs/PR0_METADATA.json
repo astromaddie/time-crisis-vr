@@ -2,8 +2,8 @@
   "schema_version": 1,
   "milestone": "PR0",
   "status": "EXPERIMENTAL",
-  "publication_status": "private preparation; pinned upstream generated-source grant needs review; no release action",
-  "tested_commit": "d662948d098c57122a24a7333126097fcb778a9c",
+  "publication_status": "prepared for public experimental source; no binary release",
+  "tested_commit": "f1ae4709e9cb32575c8d1925f1ce14dbe5d8db8c",
   "supported_targets": [
     "Steam Frame Lepton / Android ARM64 / SteamVR OpenXR"
   ],
@@ -16,7 +16,7 @@
   },
   "validation": {
     "full_build_command": "./Build-Steam-Frame.sh --rom <separately supplied ROM ZIP> --jobs 4",
-    "full_build_result": "PASS; fresh checkout at the tested source commit and pinned submodule built a complete ARM64 APK. No ROM hash was recorded.",
+    "full_build_result": "PASS; fresh checkout at full_build_source_commit and pinned submodule built a complete ARM64 APK. No ROM hash was recorded.",
     "toolchain": {
       "python": "3.14.6",
       "jdk": "OpenJDK 17.0.20.1",
@@ -89,14 +89,25 @@
       "windows_artifact_missing": "tests/test_pc.py expects the separately built Windows ZIP.",
       "headless_browser": "tests/test_play_area_render.py: Chrome exited -6 before producing a render."
     },
-    "test_only_change": "tests/test_frame_native_syntax.py now resolves compiler source paths before matching, handling macOS /tmp canonicalization. The APK build used the unmodified production source at tested_commit."
+    "test_only_change": "tests/test_frame_native_syntax.py now resolves compiler source paths before matching, handling macOS /tmp canonicalization. The APK build used the unmodified production source at tested_commit.",
+    "full_build_source_commit": "d662948d098c57122a24a7333126097fcb778a9c",
+    "latest_host_validation": {
+      "source_commit": "f1ae4709e9cb32575c8d1925f1ce14dbe5d8db8c",
+      "commands": [
+        "python3 tests/test_frame_lobby.py",
+        "python3 tests/test_portable_controls.py",
+        "python3 tests/test_frame_native_syntax.py"
+      ],
+      "result": "PASS; native lobby and loopback LAN handshake, production controls, and Quest/Frame native syntax checks. Localhost socket permission was required for the lobby check."
+    }
   },
   "runtime_observation": "User confirmed actual Steam gameplay at 2160 resolution and 120 Hz using the larger window. This is not a sustained frame-time measurement.",
   "known_runtime_notes": [
     "A prior automated shutdown check recorded an Android UI surface-callback SIGSEGV; not retested in this build check.",
     "An earlier rear-facing view check recorded a black image; not retested in this build check."
   ],
-  "source_publication_rights": "The port code is MIT-licensed. The pinned upstream MIT notice credits copyright (c) 2026 cmcrann. The pinned history/tree contains generated C translations for multiple commercial games, and this repository does not establish whether that notice covers those translations.",
-  "binary_distribution": "Not authorized by this build record; APK was generated locally and then removed.",
-  "build_isolation": "Fresh checkout at immutable source commit; HOME pointed to an isolated temporary directory; system/global Git configuration and personal Git credentials disabled. The custom signing key was generated at the explicit temporary HOME and verified against the APK certificate. Public submodule, SDL and Khronos dependencies were fetched anonymously. No ROM hash, ROM file, APK, or signing key is in the repository or receipt."
+  "source_publication_rights": "Port and pinned reconstruction source retain their original MIT notices. The repository includes generated C source, not a ROM archive or extracted game media. Source notices do not grant rights to the original arcade ROM, graphics or audio.",
+  "binary_distribution": "Source-only publication; the recorded clean Frame APK excluded the ROM and was generated locally, then removed.",
+  "build_isolation": "Fresh checkout at immutable source commit; HOME pointed to an isolated temporary directory; system/global Git configuration and personal Git credentials disabled. The custom signing key was generated at the explicit temporary HOME and verified against the APK certificate. Public submodule, SDL and Khronos dependencies were fetched anonymously. No ROM hash, ROM file, APK, or signing key is in the repository or receipt.",
+  "distribution_blockers": []
 }
