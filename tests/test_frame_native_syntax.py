@@ -33,8 +33,15 @@ for mode in ('Quest','Frame'):
     subprocess.run(arguments+flags+['-fsyntax-only','-Werror=implicit-function-declaration',str(ROOT/'quest/frame_replay.c')],cwd=NATIVE,check=True)
     print('PASS:',mode,'frame_replay.c')
 commands=subprocess.check_output([NINJA,'-C',str(NATIVE),'-t','commands'],text=True).splitlines()
-engine_run=ROOT/'.tools/upstream-steam-frame/engine/ss22_run.c'
-command=next(line for line in commands if str(engine_run) in line and ' -c ' in line)
+engine_run=(ROOT/'.tools/upstream-steam-frame/engine/ss22_run.c').resolve()
+command=next(
+    line for line in commands
+    if ' -c ' in line and any(
+        Path(argument).resolve()==engine_run
+        for argument in shlex.split(line)
+        if argument.endswith('.c')
+    )
+)
 original=shlex.split(command);arguments=[];skip=False
 for argument in original:
     if skip:skip=False;continue

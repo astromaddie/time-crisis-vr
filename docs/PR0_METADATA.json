@@ -2,31 +2,101 @@
   "schema_version": 1,
   "milestone": "PR0",
   "status": "EXPERIMENTAL",
-  "publication_status": "private preparation; no release published",
-  "tested_commit": "2dcabdfe7a34fd6c0419836f09b70a0959cb1cb8",
+  "publication_status": "private preparation; pinned upstream generated-source grant needs review; no release action",
+  "tested_commit": "d662948d098c57122a24a7333126097fcb778a9c",
   "supported_targets": [
     "Steam Frame Lepton / Android ARM64 / SteamVR OpenXR"
   ],
-  "validation": {
-    "commit": "2dcabdfe7a34fd6c0419836f09b70a0959cb1cb8",
-    "commands": [
-      "python3 tests/test_frame_installer.py",
-      "python3 tests/test_portable_import.py",
-      "python3 -m py_compile tests/test_frame_apk.py tests/test_frame_installer.py tests/test_frame_native_syntax.py tests/test_portable_controls.py tests/test_portable_import.py tests/test_sdl_clipboard_patch.py tests/test_ui_capture.py tools/build.py tools/build_frame.py tools/build_pc.py tools/host_paths.py tools/steam_frame/bundle/install.py",
-      "sh Build-Steam-Frame.sh --help",
-      "python3 tools/build_frame.py (no --rom; expected argparse required-argument exit 2)"
-    ],
-    "result": "PASS; installer/import tests and Python compilation passed; help completed; no-ROM guard stopped before build work with the expected required --rom message.",
-    "full_build": "BLOCKED pending the matching user-owned Time Crisis World TS2 Ver.B ROM ZIP; none was supplied for this run."
+  "source_identity": {
+    "source_commit": "d662948d098c57122a24a7333126097fcb778a9c",
+    "source_worktree_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "upstream_submodule_commit": "6aaa90b4cbc7a23733e1c9f5f9a5e772a19fe23d",
+    "generated_upstream_tree_sha256": "43cb98b644f0bf1b30a1d264e6deafac300d1ba626ffaef31d7f94f1a7156c59",
+    "patch_script_sha256": "d59ed95efe32a7ed1a9bb200c21cf417db46074a50c45cf9a70fa9322365ee9b"
   },
-  "full_application_build": "BLOCKED pending the matching user-owned Time Crisis World TS2 Ver.B ROM ZIP; none was supplied for this run.",
-  "focused_headset_acceptance": "pending clean candidate acceptance",
-  "sustained_worn_performance": "unmeasured on current candidate",
-  "distribution_blockers": [
-    "Generated commercial-game reconstruction source permissions unresolved",
-    "Shutdown SIGSEGV remains unresolved; rear-facing view is black"
+  "validation": {
+    "full_build_command": "./Build-Steam-Frame.sh --rom <separately supplied ROM ZIP> --jobs 4",
+    "full_build_result": "PASS; fresh checkout at the tested source commit and pinned submodule built a complete ARM64 APK. No ROM hash was recorded.",
+    "toolchain": {
+      "python": "3.14.6",
+      "jdk": "OpenJDK 17.0.20.1",
+      "android_platform": 34,
+      "android_build_tools": "35.0.0",
+      "android_ndk": "27.2.12479018 r27c",
+      "cmake": "3.22.1",
+      "ninja": "1.10.2",
+      "jobs": 4
+    },
+    "dependencies": {
+      "sdl": {
+        "version": "2.30.11",
+        "url": "https://www.libsdl.org/release/SDL2-2.30.11.tar.gz",
+        "sha256": "8b8d4aef2038533da814965220f88f77d60dfa0f32685f80ead65e501337da7f"
+      },
+      "openxr_android_loader": {
+        "version": "1.1.43",
+        "url": "https://repo.maven.apache.org/maven2/org/khronos/openxr/openxr_loader_for_android/1.1.43/openxr_loader_for_android-1.1.43.aar",
+        "sha256": "7e1b36141f9a4f1fa4a7e061936344fd9fcd36bce6c47eae2ad09812736167b6",
+        "arm64_library_sha256": "713e3bb8d955254c670acc1c4899a65cb8c930e97dd9958bf37ea922d72b7a06"
+      }
+    },
+    "apk": {
+      "sha256": "1a5e1a6bd0cc69f9686614adbaf4987fff909716bd1c5f0873e9778ea66506a8",
+      "size_bytes": 5862600,
+      "package": "org.timecrisis.frame",
+      "version_code": 1,
+      "version_name": "0.8.4-frame1",
+      "abi": "arm64-v8a",
+      "roms_bundled": false,
+      "signature": "APK Signature Scheme v3 verified; signer SHA-256 2bf520a9949cc26dd8bd67fb3bb1b8a77d5104c11220a9eed4e9236424faebb9",
+      "signing_key": "Generated at the explicit temporary HOME under .config/time-crisis-vr/frame-dev.keystore; key certificate matches the APK signer.",
+      "alignment": "zipalign -c -P 16 4 passed",
+      "archive_integrity": "unzip -t passed"
+    },
+    "host_checks_passed": [
+      "python3 tests/test_frame_apk.py",
+      "python3 tests/test_frame_installer.py",
+      "python3 tests/test_frame_native_syntax.py (after the test-only macOS path fix)",
+      "python3 tests/test_frame_replay.py",
+      "python3 tests/test_play_area.py",
+      "python3 tests/test_portable_controls.py",
+      "python3 tests/test_portable_import.py",
+      "python3 tests/test_sprite_report.py",
+      "python3 tests/test_ui_capture.py",
+      "python3 tests/test_patches.py",
+      "python3 tests/test_coop_identity.py",
+      "python3 tests/test_coop_manifest.py",
+      "python3 tests/test_coop_persistence.py",
+      "python3 tests/test_coop_recordings.py",
+      "python3 tests/test_sdl_clipboard_patch.py",
+      "tests/test_coop_clock.c, tests/test_coop_lan.c, tests/test_coop_stall.c compiled against production quest/quest_coop.c and passed"
+    ],
+    "platform_checks_not_passed": {
+      "windows_tooling_or_powershell": [
+        "tests/test_color.py",
+        "tests/test_diagnostics.py",
+        "tests/test_handedness.py",
+        "tests/test_rasters.py",
+        "tests/test_render_batches.py",
+        "tests/test_shaders.py",
+        "tests/test_sprite_cache.py"
+      ],
+      "pillow_unavailable": [
+        "tests/test_gun_render.py",
+        "tests/test_options.py"
+      ],
+      "device_tool_missing_without_device_action": "tests/test_color_device.py could not find adb and did not reach a device.",
+      "windows_artifact_missing": "tests/test_pc.py expects the separately built Windows ZIP.",
+      "headless_browser": "tests/test_play_area_render.py: Chrome exited -6 before producing a render."
+    },
+    "test_only_change": "tests/test_frame_native_syntax.py now resolves compiler source paths before matching, handling macOS /tmp canonicalization. The APK build used the unmodified production source at tested_commit."
+  },
+  "runtime_observation": "User confirmed actual Steam gameplay at 2160 resolution and 120 Hz using the larger window. This is not a sustained frame-time measurement.",
+  "known_runtime_notes": [
+    "A prior automated shutdown check recorded an Android UI surface-callback SIGSEGV; not retested in this build check.",
+    "An earlier rear-facing view check recorded a black image; not retested in this build check."
   ],
-  "license_scope": "Retained component notices apply to their stated code; they do not grant redistribution rights to commercial ROMs, extracted media, saves or proprietary libraries.",
-  "changelog": "CHANGELOG.md",
-  "build_isolation": "Fresh local source checkout, empty shell HOME, env -i, disabled system/global Git config and no personal Git credentials. Root repositories remain private, so anonymous root cloning cannot be claimed before publication."
+  "source_publication_rights": "The port code is MIT-licensed. The pinned upstream MIT notice credits copyright (c) 2026 cmcrann. The pinned history/tree contains generated C translations for multiple commercial games, and this repository does not establish whether that notice covers those translations.",
+  "binary_distribution": "Not authorized by this build record; APK was generated locally and then removed.",
+  "build_isolation": "Fresh checkout at immutable source commit; HOME pointed to an isolated temporary directory; system/global Git configuration and personal Git credentials disabled. The custom signing key was generated at the explicit temporary HOME and verified against the APK certificate. Public submodule, SDL and Khronos dependencies were fetched anonymously. No ROM hash, ROM file, APK, or signing key is in the repository or receipt."
 }
