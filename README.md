@@ -80,4 +80,4 @@ The Android surface can crash during the diagnostic self-exit path. Normal play 
 
 DR-89 and contributors provide the original VR port. The reconstruction dependency is pinned at `6aaa90b4cbc7a23733e1c9f5f9a5e772a19fe23d`. Original notices are retained in [LICENSE](LICENSE), [NOTICE.md](NOTICE.md) and the dependency.
 
-The MIT notice for port code doesn't grant rights to Time Crisis's arcade program, ROM, graphics or sound. The source includes the upstream reconstruction and keeps its MIT notice. ROM dumps and game media aren't included. See [the build and publication record](docs/PR0_READINESS.md). The [architecture notes](docs/VR_ARCHITECTURE.md) hold the implementation and performance history.
+The MIT notice for port code doesn't grant rights to Time Crisis's arcade program, ROM, graphics or sound. The source includes the upstream reconstruction and keeps its MIT notice. ROM dumps and extracted game assets aren't included. See [the build and publication record](docs/PR0_READINESS.md). The [architecture notes](docs/VR_ARCHITECTURE.md) hold the implementation and performance history.

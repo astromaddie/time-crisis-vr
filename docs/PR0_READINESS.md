@@ -22,6 +22,6 @@ The all-tests sweep also exposed host-only gaps: the Windows-specific tests requ
 
 ## Source and binary rights
 
-The port code and pinned reconstruction retain their original MIT notices, including the upstream copyright (c) 2026 cmcrann. The dependency contains reconstructed engine and generated C source. The repository has no ROM archives, extracted chip dumps or game media, and the checked Frame APK excluded the ROM. Supply the retail ROM separately; source notices do not grant redistribution rights to the original game files.
+The port code and pinned reconstruction retain their original MIT notices, including the upstream copyright (c) 2026 cmcrann. The dependency contains reconstructed engine and generated C source. The repository has no ROM archives, extracted chip dumps or game-data archives, and the checked Frame APK excluded the ROM. Supply the retail ROM separately; source notices do not grant redistribution rights to the original game files.
 
 No APK was uploaded, installed, or launched during this check. The current build receipt is in [PR0_METADATA.json](PR0_METADATA.json). The ROM was removed from the temporary checkout after the build; it is not in the repository or the receipt.
