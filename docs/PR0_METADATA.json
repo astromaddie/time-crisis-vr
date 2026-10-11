@@ -3,7 +3,7 @@
   "milestone": "PR0",
   "status": "EXPERIMENTAL",
   "publication_status": "public experimental source; no binary release",
-  "tested_commit": "f1ae4709e9cb32575c8d1925f1ce14dbe5d8db8c",
+  "tested_commit": "a3586d7117507085cdf167ca2190e9fee503d3fe",
   "supported_targets": [
     "Steam Frame Lepton / Android ARM64 / SteamVR OpenXR"
   ],
@@ -92,6 +92,16 @@
     "test_only_change": "tests/test_frame_native_syntax.py now resolves compiler source paths before matching, handling macOS /tmp canonicalization. The APK build used the unmodified production source at full_build_source_commit.",
     "full_build_source_commit": "d662948d098c57122a24a7333126097fcb778a9c",
     "latest_host_validation": {
+      "source_commit": "a3586d7117507085cdf167ca2190e9fee503d3fe",
+      "commands": [
+        "python3 tests/test_frame_lobby_focus.py",
+        "python3 tests/test_portable_controls.py",
+        "python3 tests/test_frame_native_syntax.py"
+      ],
+      "result": "PASS; production XR focus events exercise the real SS22 input backend under AddressSanitizer/UndefinedBehaviorSanitizer before and after game attachment. Existing controls, replay neutralization and Quest/Frame native syntax checks also passed.",
+      "warning": "The existing unused graphics_ready label warning remains."
+    },
+    "prior_lobby_host_validation": {
       "source_commit": "f1ae4709e9cb32575c8d1925f1ce14dbe5d8db8c",
       "commands": [
         "python3 tests/test_frame_lobby.py",

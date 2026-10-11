@@ -2,13 +2,13 @@
 
 **EXPERIMENTAL.** Public source for the Steam Frame port; no binary release is included.
 
-- **Current host-tested source:** `f1ae4709e9cb32575c8d1925f1ce14dbe5d8db8c`.
+- **Current host-tested source:** `a3586d7117507085cdf167ca2190e9fee503d3fe`.
 - **Fresh full-build source:** `d662948d098c57122a24a7333126097fcb778a9c`.
 - **Pinned reconstruction submodule:** `upstream` at `6aaa90b4cbc7a23733e1c9f5f9a5e772a19fe23d`.
 - **Build route:** `./Build-Steam-Frame.sh --rom /path/to/your/timecris.zip --jobs 4`.
 - **Toolchain:** Python 3.14.6, OpenJDK 17.0.20.1, Android platform 34, build-tools 35.0.0, NDK 27.2.12479018 r27c, CMake 3.22.1 and Ninja 1.10.2. Pinned public inputs were SDL 2.30.11 and Khronos OpenXR loader 1.1.43.
 
-The current source also passed `tests/test_frame_lobby.py`, `tests/test_portable_controls.py` and `tests/test_frame_native_syntax.py`. These cover the native Solo/Host/Join lobby, loopback LAN handshake, production controls and both Quest/Frame compilation paths. They do not replace the separate full-build receipt below.
+The current source passed `tests/test_frame_lobby_focus.py`, `tests/test_portable_controls.py` and `tests/test_frame_native_syntax.py`. The focus regression uses production XR events and the real SS22 input backend under AddressSanitizer and UndefinedBehaviorSanitizer, covering focus changes before and after the game attaches. Controls, replay neutralization and Quest/Frame syntax checks passed too. The earlier `f1ae4709` lobby/loopback LAN check remains recorded separately. These host checks do not replace the full-build receipt below.
 
 ## Build and package checks
 

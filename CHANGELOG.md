@@ -10,3 +10,5 @@
 ## 2026-10-11 — public source preparation
 
 - Clarified the ROM-free Frame source/package boundary and retained the upstream reconstruction notice.
+
+- Fixed startup focus handling so the native lobby does not call the game input backend before it is initialized; added a real-backend sanitizer regression.
