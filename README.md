@@ -4,6 +4,8 @@ This is my Steam Frame fork of [DR-89's Time Crisis VR](https://github.com/DR-89
 
 **EXPERIMENTAL.** I made this for personal use. Bring your own matching **Time Crisis World TS2 Ver.B** ROM archive (`timecris.zip`). The Frame build makes a ROM-free APK and imports your game files separately.
 
+**Want to play on Steam Frame?** Download the prebuilt standalone APK from the [v0.1.0 prerelease](https://github.com/astromaddie/time-crisis-vr/releases/tag/v0.1.0); no compiler is needed. Bring your own matching Time Crisis World TS2 Ver.B ROM archive (`timecris.zip`) and import it separately.
+
 I've played the solo version on my Frame at **2160×2160 per eye with SteamVR set to 120 Hz**. The gun angle, opening train explosions, audio, grip cover/reload and Menu pause/resume are working. I've also tried the larger gameplay window and darker surround, and I'm happy with how they look.
 
 ## What this fork adds
