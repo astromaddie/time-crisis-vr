@@ -15,6 +15,8 @@
 
   This source route is not a release authorization. License scope and unresolved generated-source rights are described in [NOTICE.md](../NOTICE.md).
 
+The immutable PR0 test source commit, supported targets and final check results are in [PR0_METADATA.json](PR0_METADATA.json).
+
 ## Evidence
 
 | Surface | Evidence |

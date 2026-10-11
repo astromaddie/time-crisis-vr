@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "milestone": "PR0",
+  "status": "EXPERIMENTAL",
+  "publication_status": "private preparation; no release published",
+  "tested_commit": "2dcabdfe7a34fd6c0419836f09b70a0959cb1cb8",
+  "supported_targets": [
+    "Steam Frame Lepton / Android ARM64 / SteamVR OpenXR"
+  ],
+  "validation": {
+    "commit": "2dcabdfe7a34fd6c0419836f09b70a0959cb1cb8",
+    "commands": [
+      "python3 tests/test_frame_installer.py",
+      "python3 tests/test_portable_import.py",
+      "python3 -m py_compile tests/test_frame_apk.py tests/test_frame_installer.py tests/test_frame_native_syntax.py tests/test_portable_controls.py tests/test_portable_import.py tests/test_sdl_clipboard_patch.py tests/test_ui_capture.py tools/build.py tools/build_frame.py tools/build_pc.py tools/host_paths.py tools/steam_frame/bundle/install.py",
+      "sh Build-Steam-Frame.sh --help",
+      "python3 tools/build_frame.py (no --rom; expected argparse required-argument exit 2)"
+    ],
+    "result": "PASS; installer/import tests and Python compilation passed; help completed; no-ROM guard stopped before build work with the expected required --rom message.",
+    "full_build": "BLOCKED pending the matching user-owned Time Crisis World TS2 Ver.B ROM ZIP; none was supplied for this run."
+  },
+  "full_application_build": "BLOCKED pending the matching user-owned Time Crisis World TS2 Ver.B ROM ZIP; none was supplied for this run.",
+  "focused_headset_acceptance": "pending clean candidate acceptance",
+  "sustained_worn_performance": "unmeasured on current candidate",
+  "distribution_blockers": [
+    "Generated commercial-game reconstruction source permissions unresolved",
+    "Shutdown SIGSEGV remains unresolved; rear-facing view is black"
+  ],
+  "license_scope": "Retained component notices apply to their stated code; they do not grant redistribution rights to commercial ROMs, extracted media, saves or proprietary libraries.",
+  "changelog": "CHANGELOG.md",
+  "build_isolation": "Fresh local source checkout, empty shell HOME, env -i, disabled system/global Git config and no personal Git credentials. Root repositories remain private, so anonymous root cloning cannot be claimed before publication."
+}
