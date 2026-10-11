@@ -131,7 +131,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrStopHapticFeedback(XrSession s,const XrHapticAc
     (void)s;assert(info->action==haptic_action);last_stop=info->subactionPath;return XR_SUCCESS;
 }
 void eng_audio_set_volume(int v){(void)v;}
+#ifndef TCVR_REAL_SOUND_INPUTS
 void ss22_snd_inputs(uint16_t bits,unsigned w,unsigned p1,unsigned p2){(void)w;(void)p1;(void)p2;arcade_bits=bits;}
+#endif
 V3 qgun_muzzle(V3 p,Q4 q){return add(p,rotate(q,v3(0,0,-.1f)));}
 bool qvr_aim(V3 p,V3 d,float *x,float *y,V3 *hit){*x=p.x+.5f;*y=.5f;*hit=add(p,mul(d,2.f));return true;}
 #ifdef TCVR_STEAM_FRAME

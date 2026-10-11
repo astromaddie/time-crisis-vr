@@ -1469,6 +1469,9 @@ void ss22_input_update(void){
 void ss22_input_neutral(void){
     trigger=pedal=0;shot_pending=shot_needs_release=fire_output_down=false;
 #ifdef TCVR_STEAM_FRAME
+    /* The launch lobby receives real focus events before tc_game_main installs
+     * g_ss22_game. Clear local edges above, but do not touch its cabinet yet. */
+    if(in_lobby)return;
     /* Focus/options resets clear live edges, but replay owns the cabinet state. */
     if(frame_diag.replay)return;
 #endif
