@@ -2,7 +2,7 @@
 from pathlib import Path
 import argparse, hashlib, json, os, shutil, subprocess, sys, tempfile, zipfile
 import xml.etree.ElementTree as ET
-from host_paths import android_sdk_root, executable, java_home
+from host_paths import android_sdk_root, executable, frame_ndk_tool, java_home
 import bootstrap, patch_sdl_frame, patch_upstream, translate_crate
 ROOT=Path(__file__).resolve().parents[1]
 FRAME_BUILD=os.environ.get('TCVR_STEAM_FRAME_BUILD')=='1'
@@ -161,7 +161,7 @@ def package(assets):
     (assets/'models.sha256').write_text(hashlib.sha256(model.read_bytes()).hexdigest()+'  '+model.name+'\n',encoding='ascii')
     if FRAME_BUILD:
         sdk=Path(os.environ['ANDROID_SDK_ROOT']);bt=sdk/'build-tools/35.0.0';android=sdk/'platforms/android-34/android.jar'
-        d8=bt/'lib/d8.jar';strip=Path(os.environ['ANDROID_NDK_ROOT'])/'toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-strip'
+        d8=bt/'lib/d8.jar';strip=frame_ndk_tool(os.environ['ANDROID_NDK_ROOT'],'llvm-strip')
     else:
         paths=quest_android_tools();bt=paths['build_tools'];android=paths['android_jar'];strip=paths['strip']
         d8=bt/'lib/d8.jar'
@@ -222,7 +222,7 @@ def package(assets):
         xr_archive=ROOT/'.tools/downloads/openxr_loader_for_android-1.1.43.aar'
         loader=ROOT/'.tools/openxr/prefab/modules/openxr_loader/libs/android.arm64-v8a/libopenxr_loader.so'
         cmake=os.environ.get('CMAKE','cmake');ninja=os.environ.get('NINJA','ninja')
-        clang=ndk/'toolchains/llvm/prebuilt/darwin-x86_64/bin/clang'
+        clang=frame_ndk_tool(ndk,'clang')
         report.update({
             'package':'org.timecrisis.frame',
             'source_revision':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),

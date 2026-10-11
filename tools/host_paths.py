@@ -1,6 +1,7 @@
 """Resolve standard host tools without machine-specific user paths."""
 from pathlib import Path
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -47,6 +48,20 @@ def java_tool(name):
     if not path.is_file():
         raise RuntimeError(f'JDK tool not found: {path}')
     return path
+
+
+def frame_ndk_tool(ndk, name):
+    """Select tools for the build computer, independently of the ARM64 APK target."""
+    if sys.platform == 'darwin':
+        host = 'darwin-x86_64'
+    elif sys.platform == 'linux' and platform.machine().lower() in ('x86_64', 'amd64'):
+        host = 'linux-x86_64'
+    else:
+        raise RuntimeError('Build the Frame APK on macOS or x86_64 Linux; on Windows use x86_64 WSL2. The official Linux NDK does not run natively on the ARM64 Frame.')
+    tool = Path(ndk)/'toolchains/llvm/prebuilt'/host/'bin'/name
+    if not tool.is_file():
+        raise RuntimeError(f'Android NDK host tool not found: {tool}')
+    return tool
 
 
 def executable(name, environment=None):

@@ -1,7 +1,7 @@
 """Build the Steam Frame arm64 APK from a local Android toolchain."""
 from pathlib import Path
 import argparse, os, shutil, subprocess, sys
-from host_paths import android_sdk_root, executable, java_home
+from host_paths import android_sdk_root, executable, frame_ndk_tool, java_home
 
 ROOT = Path(__file__).resolve().parents[1]
 PINNED_UPSTREAM = '6aaa90b4cbc7a23733e1c9f5f9a5e772a19fe23d'
@@ -36,6 +36,8 @@ def main():
     ndk=sdk/'ndk/27.2.12479018'
     for path in (sdk/'platforms/android-34/android.jar',sdk/'build-tools/35.0.0/aapt2',ndk/'build/cmake/android.toolchain.cmake',java/'bin/java'):
         if not path.exists(): raise RuntimeError('Required installed Android tool not found: ' + str(path))
+    frame_ndk_tool(ndk,'clang')
+    frame_ndk_tool(ndk,'llvm-strip')
     upstream=prepare_mirror()
     env=os.environ.copy()
     env.update({'ANDROID_SDK_ROOT':str(sdk),'ANDROID_NDK_ROOT':str(ndk),'JAVA_HOME':str(java),

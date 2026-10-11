@@ -54,9 +54,11 @@ outside_darkening=0.65
 
 Use `gameplay_scale=1` for the earlier window size, or `outside_darkening=0` to remove the shading. The cyan border is a guide on the HUD plane; aiming still uses the reconstructed world and the arcade game's original hit tests.
 
-## Build
+## Build and install
 
-Build on macOS or Linux with Python 3, JDK 17, CMake, Ninja and the Android SDK. Set `JAVA_HOME` and `ANDROID_SDK_ROOT` to your own tool installations. Install Android platform 34, build-tools 35.0.0 and NDK 27.2.12479018.
+You don't need a Mac. Build the APK on **macOS**, **x86_64 Linux**, or **Windows using x86_64 WSL2 Ubuntu**. Use Linux SDK tools inside WSL, with the checkout in its Linux home folder. The APK runs standalone on the Frame; the official Linux Android NDK doesn't run natively on the Frame's ARM64 Desktop.
+
+Install Git, Python 3, JDK 17, CMake, Ninja and the Android SDK command-line tools. Set `JAVA_HOME` and `ANDROID_SDK_ROOT` to those installations and add `$ANDROID_SDK_ROOT/cmdline-tools/latest/bin` to `PATH`. [BUILDING.md](BUILDING.md) covers setup and first installation.
 
 ```sh
 git clone --recurse-submodules --branch steam-frame https://github.com/astromaddie/time-crisis-vr.git
@@ -64,12 +66,13 @@ cd time-crisis-vr
 export JAVA_HOME="/path/to/jdk-17"
 export ANDROID_SDK_ROOT="/path/to/android-sdk"
 sdkmanager "platforms;android-34" "build-tools;35.0.0" "ndk;27.2.12479018"
+sdkmanager --licenses
 ./Build-Steam-Frame.sh --rom "/path/to/your/timecris.zip" --jobs 4
 ```
 
 The build checks the ROM chips, generates the needed game code, fetches pinned SDL/OpenXR dependencies and produces `artifacts/TimeCrisisVR-SteamFrame-arm64.apk`. The APK excludes the ROM; keep the supplied archive and generated game files private.
 
-For installation, the [local bundle guide](tools/steam_frame/bundle/README.txt) explains the installer and persistent folders. It expects a prepared package with its build receipt and checksums, not just this source template. The installer backs up the existing game folder, copies the APK and ROM separately, and registers the Steam title.
+For a first install, upload only the APK with Valve's SteamOS Devkit Client: name `TimeCrisisVR`, start command `TimeCrisisVR-SteamFrame-arm64.apk`, runtime **Android**. Copy your ROM separately to `~/Documents/TimeCrisisVR/timecris.zip` on the Frame, then launch the new Steam library entry. See [the installation steps](BUILDING.md#install-on-the-frame). The [local bundle installer](tools/steam_frame/bundle/README.txt) is an optional route for a prepared package, not the source checkout.
 
 ## Current gaps
 
