@@ -1,6 +1,6 @@
 # PR0 source readiness
 
-**EXPERIMENTAL.** Public source preparation for the Steam Frame port; no binary release is included.
+**EXPERIMENTAL.** Public source for the Steam Frame port; no binary release is included.
 
 - **Current host-tested source:** `f1ae4709e9cb32575c8d1925f1ce14dbe5d8db8c`.
 - **Fresh full-build source:** `d662948d098c57122a24a7333126097fcb778a9c`.

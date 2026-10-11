@@ -2,7 +2,7 @@
   "schema_version": 1,
   "milestone": "PR0",
   "status": "EXPERIMENTAL",
-  "publication_status": "prepared for public experimental source; no binary release",
+  "publication_status": "public experimental source; no binary release",
   "tested_commit": "f1ae4709e9cb32575c8d1925f1ce14dbe5d8db8c",
   "supported_targets": [
     "Steam Frame Lepton / Android ARM64 / SteamVR OpenXR"
@@ -89,7 +89,7 @@
       "windows_artifact_missing": "tests/test_pc.py expects the separately built Windows ZIP.",
       "headless_browser": "tests/test_play_area_render.py: Chrome exited -6 before producing a render."
     },
-    "test_only_change": "tests/test_frame_native_syntax.py now resolves compiler source paths before matching, handling macOS /tmp canonicalization. The APK build used the unmodified production source at tested_commit.",
+    "test_only_change": "tests/test_frame_native_syntax.py now resolves compiler source paths before matching, handling macOS /tmp canonicalization. The APK build used the unmodified production source at full_build_source_commit.",
     "full_build_source_commit": "d662948d098c57122a24a7333126097fcb778a9c",
     "latest_host_validation": {
       "source_commit": "f1ae4709e9cb32575c8d1925f1ce14dbe5d8db8c",
@@ -109,5 +109,6 @@
   "source_publication_rights": "Port and pinned reconstruction source retain their original MIT notices. The repository includes generated C source, not a ROM archive or extracted game media. Source notices do not grant rights to the original arcade ROM, graphics or audio.",
   "binary_distribution": "Source-only publication; the recorded clean Frame APK excluded the ROM and was generated locally, then removed.",
   "build_isolation": "Fresh checkout at immutable source commit; HOME pointed to an isolated temporary directory; system/global Git configuration and personal Git credentials disabled. The custom signing key was generated at the explicit temporary HOME and verified against the APK certificate. Public submodule, SDL and Khronos dependencies were fetched anonymously. No ROM hash, ROM file, APK, or signing key is in the repository or receipt.",
-  "distribution_blockers": []
+  "distribution_blockers": [],
+  "publication_date": "2026-10-11"
 }
