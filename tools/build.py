@@ -2,12 +2,13 @@
 from pathlib import Path
 import argparse, hashlib, json, os, shutil, subprocess, sys, tempfile, zipfile
 import xml.etree.ElementTree as ET
+from host_paths import android_sdk_root, executable, java_home
 import bootstrap, patch_sdl_frame, patch_upstream, translate_crate
 ROOT=Path(__file__).resolve().parents[1]
 FRAME_BUILD=os.environ.get('TCVR_STEAM_FRAME_BUILD')=='1'
 UPSTREAM=Path(os.environ.get('TCVR_UPSTREAM_SOURCE',ROOT/'upstream'))
 BUILD=ROOT/('build/frame' if FRAME_BUILD else 'build')
-JAVA=Path(os.environ.get('JAVA_HOME',r'C:\Program Files\Android\Android Studio\jbr'))/'bin'
+JAVA=(Path(os.environ['JAVA_HOME']) if os.environ.get('JAVA_HOME') else (Path(r'C:\Program Files\Android\Android Studio\jbr') if os.name=='nt' else java_home()))/'bin'
 def run(args,cwd=ROOT):
     print('> '+' '.join(map(str,args)),flush=True)
     subprocess.run(list(map(str,args)),cwd=cwd,check=True)
@@ -32,6 +33,98 @@ def source_worktree_sha256():
         path=ROOT/name
         if path.is_file():digest.update(name.encode()+b'\0'+path.read_bytes())
     return digest.hexdigest()
+
+SIMULATION_FILES=(
+    'timecris/src/tc_game.c','timecris/gen/tc_c25.c','timecris/gen/tc_snd_driver.c',
+    'engine/lift_cpu.c','engine/lift_env.c','engine/ss22_run.c','engine/ss22_board.c',
+    'engine/ss22_input.c','engine/ss22_dsp.c','engine/ss22_snd.c','engine/ss22_video.c',
+    'engine/ss22_env.c','engine/ss22_game.h','engine/ss22_board.h','engine/ss22_input.h',
+    'engine/lift_rt.h','engine/c25/c25_bus.c','engine/c25/c25_core.c','engine/c25/c71_bios.c',
+)
+
+def coop_identity_path(path):
+    """Map each build view to the same logical source names on both headsets."""
+    try:
+        relative=path.relative_to(UPSTREAM)
+        return 'upstream/'+relative.as_posix()
+    except ValueError:
+        pass
+    try:
+        relative=path.relative_to(ROOT/'quest')
+        return 'quest/'+relative.as_posix()
+    except ValueError:
+        pass
+    if path==ROOT/'build/tc_crate.c':return 'generated/tc_crate.c'
+    raise RuntimeError('Unexpected co-op identity input: '+str(path))
+
+def write_coop_identity(assets):
+    # Fingerprint only shared simulation/protocol inputs, independent of each headset renderer or source mirror location.
+    sim=hashlib.sha256();sim.update(b'time-crisis-coop-simulation-v2\0protocol=1\0')
+    paths=[UPSTREAM/name for name in SIMULATION_FILES]
+    paths.extend(sorted((UPSTREAM/'timecris/gen').glob('tc_lifted_*.c')))
+    paths.extend((ROOT/'quest/quest_coop.c',ROOT/'quest/quest_coop.h',ROOT/'build/tc_crate.c'))
+    keyed=sorted((coop_identity_path(path),path) for path in paths)
+    for relative,path in keyed:
+        if not path.is_file():raise RuntimeError('Missing co-op simulation input: '+str(path))
+        sim.update(relative.encode('utf-8')+b'\0'+path.read_bytes()+b'\0')
+    public=[]
+    for line in (assets/'roms.sha256').read_text(encoding='ascii').splitlines():
+        if line.split('  ',1)[1]!='c71.bin':public.append(line)
+    if len(public)!=31:raise RuntimeError('Co-op identity requires the verified 31-chip public ROM manifest')
+    rom=hashlib.sha256(('\n'.join(public)+'\n').encode('ascii')).hexdigest()
+    generated=BUILD/'generated';generated.mkdir(parents=True,exist_ok=True)
+    (generated/'coop_identity.h').write_text(
+        '#ifndef TCVR_COOP_IDENTITY_H\n#define TCVR_COOP_IDENTITY_H\n'
+        '#define TCVR_COOP_SIM_HASH "'+sim.hexdigest()+'"\n'
+        '#define TCVR_COOP_ROM_HASH "'+rom+'"\n#endif\n',encoding='ascii')
+    return {'simulation_sha256':sim.hexdigest(),'rom_manifest_sha256':rom,'protocol_version':1}
+
+def prepare_quest_upstream():
+    """Create a disposable Quest build view so ROM generation/patching never touches the canonical submodule."""
+    global UPSTREAM
+    if FRAME_BUILD or os.name=='nt' or os.environ.get('TCVR_UPSTREAM_SOURCE'):
+        return
+    source=ROOT/'upstream'
+    expected='6aaa90b4cbc7a23733e1c9f5f9a5e772a19fe23d'
+    revision=subprocess.check_output(['git','rev-parse','HEAD'],cwd=source,text=True).strip()
+    if revision!=expected:raise RuntimeError(f'Expected pinned upstream {expected}, found {revision}')
+    status=subprocess.check_output(['git','status','--porcelain','--untracked-files=all'],cwd=source,text=True)
+    if status.strip():raise RuntimeError('Pinned upstream source must be clean before generating the Quest build view; preserve changes in another checkout.')
+    destination=BUILD/'upstream-quest'
+    marker=destination/'.tcvr-generated-source-view'
+    if destination.exists():
+        if not marker.is_file() or marker.read_text(encoding='ascii').strip()!=expected:
+            raise RuntimeError('Refusing to replace an unowned Quest source view: '+str(destination))
+        shutil.rmtree(destination)
+    shutil.copytree(source,destination,symlinks=True,ignore=shutil.ignore_patterns('.git'))
+    marker.write_text(expected+'\n',encoding='ascii')
+    UPSTREAM=destination
+    patch_upstream.ROOT=UPSTREAM
+    translate_crate.UPSTREAM=UPSTREAM
+
+
+def quest_android_tools():
+    """Resolve the existing host SDK/NDK tools for a local Quest build."""
+    if os.name == 'nt':
+        ndk=ROOT/'.tools/ndk/android-ndk-r27c'
+        return {
+            'build_tools':ROOT/'.tools/buildtools/android-15',
+            'android_jar':ROOT/'.tools/platform/android-34-ext12/android.jar',
+            'ndk':ndk,
+            'strip':ndk/'toolchains/llvm/prebuilt/windows-x86_64/bin/llvm-strip.exe',
+        }
+    sdk=android_sdk_root()
+    ndk=Path(os.environ.get('ANDROID_NDK_ROOT',sdk/'ndk/27.2.12479018'))
+    prebuilts=ndk/'toolchains/llvm/prebuilt'
+    hosts=sorted(path for path in prebuilts.glob('darwin-*') if (path/'bin/llvm-strip').is_file())
+    if not hosts:raise RuntimeError('No macOS Android NDK toolchain was found under '+str(prebuilts))
+    return {
+        'build_tools':sdk/'build-tools/35.0.0',
+        'android_jar':sdk/'platforms/android-34/android.jar',
+        'ndk':ndk,
+        'strip':hosts[0]/'bin/llvm-strip',
+    }
+
 
 def command_version(command, *args):
     """Capture a compact, exact tool identity for the Frame build receipt."""
@@ -73,19 +166,22 @@ def prepare_sound():
     translate_crate.main()
 
 def package_manifest(bundle_roms):
-    """The OpenXR activity must retain its own VR categories in both variants."""
+    """Keep ordinary launches in verified-ROM setup and VR launches on MainActivity."""
     if FRAME_BUILD:return ROOT/'quest/AndroidManifest-SteamFrame.xml'
     ET.register_namespace('android','http://schemas.android.com/apk/res/android')
     tree=ET.parse(ROOT/'quest/AndroidManifest.xml');ns='{http://schemas.android.com/apk/res/android}'
     activities={a.get(ns+'name'):a for a in tree.getroot().find('application').findall('activity')}
     main=activities['.MainActivity'];setup=activities['.LauncherActivity']
-    categories={c.get(ns+'name') for c in main.findall('intent-filter/category')}
-    assert {'android.intent.category.LAUNCHER','org.khronos.openxr.intent.category.IMMERSIVE_HMD','com.oculus.intent.category.VR'}<=categories
-    if not bundle_roms:
-        # Setup is a separate 2D task. Its handoff targets the VR-marked activity.
-        for intent in main.findall('intent-filter'):
-            for category in list(intent.findall('category')):
-                if category.get(ns+'name')=='android.intent.category.LAUNCHER':intent.remove(category)
+    categories={c.get(ns+'name') for intent in main.findall('intent-filter') for c in intent.findall('category')}
+    assert {'org.khronos.openxr.intent.category.IMMERSIVE_HMD','com.oculus.intent.category.VR'}<=categories
+    for intent in main.findall('intent-filter'):
+        for category in list(intent.findall('category')):
+            if category.get(ns+'name')=='android.intent.category.LAUNCHER':intent.remove(category)
+    launcher=any(
+        any(a.get(ns+'name')=='android.intent.action.MAIN' for a in intent.findall('action'))
+        and any(c.get(ns+'name')=='android.intent.category.LAUNCHER' for c in intent.findall('category'))
+        for intent in setup.findall('intent-filter'))
+    if not launcher:
         intent=ET.SubElement(setup,'intent-filter')
         ET.SubElement(intent,'action',{ns+'name':'android.intent.action.MAIN'})
         ET.SubElement(intent,'category',{ns+'name':'android.intent.category.LAUNCHER'})
@@ -110,17 +206,16 @@ def package(assets):
     if FRAME_BUILD:
         sdk=Path(os.environ['ANDROID_SDK_ROOT']);bt=sdk/'build-tools/35.0.0';android=sdk/'platforms/android-34/android.jar'
         d8=bt/'lib/d8.jar';strip=Path(os.environ['ANDROID_NDK_ROOT'])/'toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-strip'
-        sdl_source=ROOT/'.tools/sdl/SDL2-2.30.11';openxr=ROOT/'.tools/openxr';
     else:
-        bt=ROOT/'.tools/buildtools/android-15';android=ROOT/'.tools/platform/android-34-ext12/android.jar'
-        d8=bt/'lib/d8.jar';strip=ROOT/'.tools/ndk/android-ndk-r27c/toolchains/llvm/prebuilt/windows-x86_64/bin/llvm-strip.exe'
-        sdl_source=ROOT/'.tools/sdl/SDL2-2.30.11';openxr=ROOT/'.tools/openxr'
+        paths=quest_android_tools();bt=paths['build_tools'];android=paths['android_jar'];strip=paths['strip']
+        d8=bt/'lib/d8.jar'
+    sdl_source=ROOT/'.tools/sdl/SDL2-2.30.11';openxr=ROOT/'.tools/openxr'
     classes=BUILD/'classes';classes.mkdir(exist_ok=True)
     sdl_java_root,frame_sdl_metadata=sdl_java_source_root(sdl_source)
     sources=list(sdl_java_root.rglob('*.java'))+list((ROOT/'quest/java').rglob('*.java'))
     argfile=BUILD/'javac.args'
     argfile.write_text('\n'.join('"'+str(p).replace('\\','/')+'"' for p in sources))
-    javac=JAVA/('javac' if FRAME_BUILD else 'javac.exe');jar_tool=JAVA/('jar' if FRAME_BUILD else 'jar.exe');java=JAVA/('java' if FRAME_BUILD else 'java.exe')
+    suffix='.exe' if os.name=='nt' else '';javac=JAVA/('javac'+suffix);jar_tool=JAVA/('jar'+suffix);java=JAVA/('java'+suffix)
     run([javac,'-source','8','-target','8','-classpath',android,'-d',classes,'@'+str(argfile)])
     jar=BUILD/'classes.jar';run([jar_tool,'--create','--file',jar,'-C',classes,'.'])
     dex=BUILD/'dex';dex.mkdir(exist_ok=True)
@@ -139,7 +234,7 @@ def package(assets):
         manifest=[line for line in (assets/'roms.sha256').read_text().splitlines() if line.split('  ',1)[1]!='c71.bin']
         assert len(manifest)==31
         (public/'roms.sha256').write_text('\n'.join(manifest)+'\n',encoding='ascii')
-        run([bt/('aapt2' if FRAME_BUILD else 'aapt2.exe'),'link','--manifest',package_manifest(args.bundle_roms),'-I',android,'-A',public,'-o',base])
+        run([bt/('aapt2' + ('.exe' if os.name=='nt' else '')),'link','--manifest',package_manifest(args.bundle_roms),'-I',android,'-A',public,'-o',base])
     libs=BUILD/'package-libs';libs.mkdir(exist_ok=True)
     for name,source in [('libmain.so',BUILD/'native/libmain.so'),('libSDL2.so',BUILD/'native/sdl/libSDL2.so'),('libopenxr_loader.so',openxr/'prefab/modules/openxr_loader/libs/android.arm64-v8a/libopenxr_loader.so')]:
         run([strip,'--strip-unneeded','-o',libs/name,source])
@@ -148,7 +243,7 @@ def package(assets):
         for p in dex.glob('*.dex'):z.write(p,p.name)
         for p in libs.glob('*.so'):z.write(p,'lib/arm64-v8a/'+p.name)
     output=ROOT/('artifacts/TimeCrisisVR-SteamFrame-arm64.apk' if FRAME_BUILD else ('artifacts/bundled/TimeCrisisVR-with-ROM.apk' if args.bundle_roms else 'artifacts/TimeCrisisVR-quest3-debug.apk'));output.parent.mkdir(parents=True,exist_ok=True)
-    zipalign=bt/('zipalign' if FRAME_BUILD else 'zipalign.exe');apksigner=bt/('apksigner' if FRAME_BUILD else 'apksigner.exe')
+    zipalign=bt/('zipalign' + ('.exe' if os.name=='nt' else ''));apksigner=bt/'lib/apksigner.jar'
     run([zipalign,'-f','-P','16','4',base,output])
     if FRAME_BUILD:
         key=Path.home()/'.config/time-crisis-vr/frame-dev.keystore';key.parent.mkdir(parents=True,exist_ok=True)
@@ -158,12 +253,13 @@ def package(assets):
         alias='frame-dev'
     else:
         key=ROOT/'.tools/debug.keystore'
-        if not key.exists():run([JAVA/'keytool.exe','-genkeypair','-keystore',key,'-storepass','android','-alias','androiddebugkey','-keypass','android','-keyalg','RSA','-keysize','2048','-validity','10000','-dname','CN=Android Debug,O=Android,C=US'])
+        if not key.exists():run([JAVA/('keytool'+('.exe' if os.name=='nt' else '')),'-genkeypair','-keystore',key,'-storepass','android','-alias','androiddebugkey','-keypass','android','-keyalg','RSA','-keysize','2048','-validity','10000','-dname','CN=Android Debug,O=Android,C=US'])
         alias='androiddebugkey'
-    signer=[java,'-jar',bt/'lib/apksigner.jar']
+    signer=[java,'-jar',apksigner]
     run(signer+['sign','--ks',key,'--ks-key-alias',alias,'--ks-pass','pass:android','--key-pass','pass:android',output])
     run(signer+['verify','--verbose',output]);run([zipalign,'-c','-P','16','4',output])
     report={'apk':output.name,'sha256':hashlib.sha256(output.read_bytes()).hexdigest(),'bytes':output.stat().st_size,'upstream':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT/'upstream',text=True).strip(),'abi':'arm64-v8a','roms_bundled':False if FRAME_BUILD else args.bundle_roms,'hardware_tested':False}
+    if not args.package_only:report['coop_identity']=coop_identity
     if FRAME_BUILD:
         sdk=Path(os.environ['ANDROID_SDK_ROOT']);ndk=Path(os.environ['ANDROID_NDK_ROOT'])
         import bootstrap_frame
@@ -220,20 +316,28 @@ if __name__=='__main__':
         if FRAME_BUILD:
             import bootstrap_frame
             bootstrap_frame.main()
-        else:
+        elif os.name=='nt':
             for item in bootstrap.PACKAGES:bootstrap.fetch(item)
+        else:
+            paths=quest_android_tools()
+            for path in (paths['build_tools']/'aapt2',paths['build_tools']/'lib/d8.jar',paths['build_tools']/'lib/apksigner.jar',paths['build_tools']/'zipalign',paths['android_jar'],paths['ndk']/'build/cmake/android.toolchain.cmake',ROOT/'.tools/sdl/SDL2-2.30.11/CMakeLists.txt',ROOT/'.tools/openxr/prefab/modules/openxr_loader/libs/android.arm64-v8a/libopenxr_loader.so'):
+                if not path.is_file():raise RuntimeError('Required local Quest build input is missing: '+str(path))
+        prepare_quest_upstream()
         patch_upstream.main()
         assets=BUILD/'assets' if args.skip_prepare else prepare(args.rom)
         prepare_sound()
+        coop_identity=write_coop_identity(BUILD/'assets')
         if FRAME_BUILD:
             ndk=Path(os.environ['ANDROID_NDK_ROOT'])
             run([os.environ.get('CMAKE','cmake'),'-Wno-dev','-Wno-deprecated','-S',ROOT/'quest','-B',BUILD/'native','-G','Ninja',
                  '-DCMAKE_MAKE_PROGRAM='+os.environ.get('NINJA','ninja'),'-DCMAKE_TOOLCHAIN_FILE='+str(ndk/'build/cmake/android.toolchain.cmake'),
-                 '-DTCVR_UPSTREAM_SOURCE='+str(UPSTREAM),'-DTCVR_STEAM_FRAME=ON','-DANDROID_ABI=arm64-v8a','-DANDROID_PLATFORM=android-29',
+                 '-DTCVR_UPSTREAM_SOURCE='+str(UPSTREAM),'-DTCVR_STEAM_FRAME=ON','-DTCVR_GENERATED_DIR='+str(BUILD/'generated'),'-DANDROID_ABI=arm64-v8a','-DANDROID_PLATFORM=android-29',
                  '-DANDROID_STL=c++_static','-DCMAKE_BUILD_TYPE=Release'])
         else:
-            ndk=ROOT/'.tools/ndk/android-ndk-r27c'
-            run(['cmake','-Wno-dev','-Wno-deprecated','-S',ROOT/'quest','-B',BUILD/'native','-G','Ninja','-DCMAKE_MAKE_PROGRAM='+str(ROOT/'.tools/ninja/ninja.exe'),'-DCMAKE_TOOLCHAIN_FILE='+str(ndk/'build/cmake/android.toolchain.cmake'),'-DANDROID_ABI=arm64-v8a','-DANDROID_PLATFORM=android-29','-DANDROID_STL=c++_static','-DCMAKE_BUILD_TYPE=Release'])
+            paths=quest_android_tools();ndk=paths['ndk']
+            if os.name=='nt':cmake='cmake';ninja=ROOT/'.tools/ninja/ninja.exe'
+            else:cmake=executable('cmake');ninja=executable('ninja')
+            run([cmake,'-Wno-dev','-Wno-deprecated','-S',ROOT/'quest','-B',BUILD/'native','-G','Ninja','-DCMAKE_MAKE_PROGRAM='+str(ninja),'-DCMAKE_TOOLCHAIN_FILE='+str(ndk/'build/cmake/android.toolchain.cmake'),'-DTCVR_UPSTREAM_SOURCE='+str(UPSTREAM),'-DTCVR_GENERATED_DIR='+str(BUILD/'generated'),'-DANDROID_ABI=arm64-v8a','-DANDROID_PLATFORM=android-29','-DANDROID_STL=c++_static','-DCMAKE_BUILD_TYPE=Release'])
         run(['cmake','--build',BUILD/'native','--parallel',args.jobs])
     else:assets=BUILD/'assets'
     package(assets)

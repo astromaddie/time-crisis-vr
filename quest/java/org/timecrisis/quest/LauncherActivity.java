@@ -12,6 +12,7 @@ import java.util.Map;
 /** Setup is a separate activity: SDL/OpenXR starts only after complete ROM validation. */
 public final class LauncherActivity extends Activity {
     private TextView status;
+    private org.timecrisis.quest.CoopSessionController session;
     private Button choose, retry;
     private static final int PICK_ROM = 17;
     @Override public void onCreate(Bundle state) {
@@ -36,6 +37,23 @@ public final class LauncherActivity extends Activity {
         status.setText(detail + "\n\nGame files are not included. Supply your own Time Crisis World TS2 Ver.B ROM set (timecris.zip).\n\nYou can also use Install-ROM.ps1 via USB. No game files are downloaded by this app.");
         choose.setEnabled(true); retry.setEnabled(true);
     }
+    private void launchGame() {
+        startActivity(new Intent(this, MainActivity.class)
+                .setAction(Intent.ACTION_MAIN)
+                .addCategory("org.khronos.openxr.intent.category.IMMERSIVE_HMD")
+                .addCategory("com.oculus.intent.category.VR")
+                .putExtra("org.timecrisis.COOP_PREPARED",true)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        finish();
+    }
+    @Override public void onBackPressed() {
+        if (session != null) session.back(); else super.onBackPressed();
+    }
+    @Override protected void onDestroy() {
+        if (session != null) session.destroy();
+        super.onDestroy();
+    }
+
     private void prepare(Uri selected) {
         choose.setEnabled(false); retry.setEnabled(false); status.setText("Checking and preparing your game files…");
         new Thread(() -> {
@@ -80,12 +98,8 @@ public final class LauncherActivity extends Activity {
                 Log.i("TCVR-ROM", "ROMs verified; starting VR");
                 runOnUiThread(() -> {
                     if (isFinishing() || isDestroyed()) return;
-                    startActivity(new Intent(this, MainActivity.class)
-                        .setAction(Intent.ACTION_MAIN)
-                        .addCategory("org.khronos.openxr.intent.category.IMMERSIVE_HMD")
-                        .addCategory("com.oculus.intent.category.VR")
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-                    finish();
+                    session = new CoopSessionController(this,false,
+                            new File(getFilesDir(),"roms"),this::launchGame);
                 });
             } catch (Exception e) {
                 Log.w("TCVR-ROM", "Setup: " + e.getMessage());

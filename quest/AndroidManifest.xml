@@ -5,6 +5,7 @@
   <uses-feature android:name="android.hardware.vr.headtracking" android:version="1" android:required="true" />
   <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
   <uses-permission android:name="android.permission.VIBRATE" />
+  <uses-permission android:name="android.permission.INTERNET" />
   <uses-permission android:name="org.khronos.openxr.permission.OPENXR" />
   <uses-permission android:name="org.khronos.openxr.permission.OPENXR_SYSTEM" />
   <queries>
@@ -16,9 +17,11 @@
     <meta-data android:name="com.oculus.supportedDevices" android:value="quest2|quest3|quest3s" />
     <meta-data android:name="com.oculus.intent.category.VR" android:value="vr_only" />
     <meta-data android:name="com.oculus.vr.focusaware" android:value="true" />
-    <activity android:name=".LauncherActivity" android:exported="true" android:screenOrientation="landscape" android:taskAffinity="org.timecrisis.quest.setup" android:excludeFromRecents="true" />
+    <activity android:name=".LauncherActivity" android:exported="true" android:screenOrientation="landscape" android:taskAffinity="org.timecrisis.quest.setup" android:excludeFromRecents="true">
+      <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+    </activity>
     <activity android:name=".MainActivity" android:exported="true" android:screenOrientation="landscape" android:launchMode="singleTask" android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode|density">
-      <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /><category android:name="org.khronos.openxr.intent.category.IMMERSIVE_HMD" /><category android:name="com.oculus.intent.category.VR" /></intent-filter>
+      <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="org.khronos.openxr.intent.category.IMMERSIVE_HMD" /><category android:name="com.oculus.intent.category.VR" /></intent-filter>
     </activity>
   </application>
 </manifest>

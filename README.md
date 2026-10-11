@@ -19,6 +19,8 @@ I've played it on my Frame at **2160×2160 per eye with SteamVR set to 120 Hz**.
 
 The original VR port supplies the reconstructed stereo world, gun rendering and arcade gameplay. The arcade simulation keeps its original rate of about 60 Hz while the headset follows SteamVR's display rate.
 
+Steam Frame and Quest 3 can also share a fresh local Wi-Fi run. See the [LAN co-op guide](docs/LAN-COOP.md) for lobby behavior, network ports, compatibility, build commands, and current verification limits.
+
 ## Controls
 
 | Input | Action |
