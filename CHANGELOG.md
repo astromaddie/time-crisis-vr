@@ -13,4 +13,4 @@
 
 - Fixed startup focus handling so the native lobby does not call the game input backend before it is initialized; added a real-backend sanitizer regression.
 
-- Clarified that multiplayer and the new startup lobby are unfinished development on the same branch; confirmed gameplay notes refer to solo play.
+- Marked multiplayer as work in progress being moved to a separate development branch; confirmed gameplay notes refer to solo play.

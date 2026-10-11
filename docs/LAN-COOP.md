@@ -1,6 +1,6 @@
 # Local LAN co-op
 
-**Work in progress — not ready to recommend.** This code is currently included on the default `steam-frame` branch, rather than isolated on a separate multiplayer branch. These notes describe the intended behavior and development checks, not a finished multiplayer release.
+**Work in progress.** Multiplayer is being moved to a separate development branch. These notes describe the intended behavior and development checks, not a finished multiplayer release.
 
 The co-op implementation aims to let Steam Frame and Quest 3 share one fresh Time Crisis run over the same local Wi-Fi network. The headset that hosts controls P1; the joining headset controls P2. The game and simulation run on both headsets. The Frame coordinates one ordered arcade input stream so both simulations consume the same input at each `rr_frame`; the joiner waits at a tick boundary when the next canonical input has not arrived. No PC, cloud account, or remote avatar is involved.
 

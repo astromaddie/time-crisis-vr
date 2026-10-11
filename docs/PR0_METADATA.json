@@ -122,9 +122,9 @@
   "distribution_blockers": [],
   "publication_date": "2026-10-11",
   "multiplayer_status": {
-    "status": "unfinished development; not ready to recommend",
-    "branch": "steam-frame",
-    "separate_multiplayer_branch": false,
+    "status": "work in progress",
+    "branch": null,
+    "branch_separation": "move to a separate development branch in progress; destination name not yet recorded",
     "gameplay_confirmation_scope": "solo play; no multiplayer readiness claim"
   }
 }
