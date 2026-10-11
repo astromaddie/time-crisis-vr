@@ -1,33 +1,80 @@
-# Time Crisis VR for Steam Frame — experimental source
+# Time Crisis VR for Steam Frame
 
-**Upstream VR port: [DR-89/time-crisis-vr](https://github.com/DR-89/time-crisis-vr).** This repository is the [astromaddie Steam Frame fork](https://github.com/astromaddie/time-crisis-vr/tree/steam-frame), which builds a standalone ARM64 APK for SteamVR through the Frame's Lepton container, with persistent storage and Frame controller bindings. Its `upstream/` git submodule points to [spacestate1/namco22-decompile](https://github.com/spacestate1/namco22-decompile) at `6aaa90b4cbc7a23733e1c9f5f9a5e772a19fe23d`.
+This is my Steam Frame fork of [DR-89's Time Crisis VR](https://github.com/DR-89/time-crisis-vr), built on the [Namco System 22 reconstruction](https://github.com/spacestate1/namco22-decompile). It runs on the headset itself through Lepton and SteamVR OpenXR, as an Android ARM64 app.
 
-**Status: EXPERIMENTAL; made for personal use.** This source-preparation task does not change repository visibility or publish a release. The prior tested runtime source is `3e6077444f9a293a2fa76263dbc9267c8955dfe8`; the source-preparation baseline was `8cd6738886bac9678cc2f0aa5ce32a9410b3654f`, whose intervening changes only updated evidence and delivery documentation.
+**EXPERIMENTAL.** I made this for personal use. Bring your own matching **Time Crisis World TS2 Ver.B** ROM archive (`timecris.zip`). The Frame build makes a ROM-free APK and imports your game files separately.
 
-| Area | Evidence and limit |
-|---|---|
-| Fresh PR0 host tests | Production Java importer/installer checks passed using synthetic data, with explicit-ROM guards and Python compilation. Full APK rebuild awaits the matching ROM ZIP. |
-| Prior host build and production-path tests | The tested APK was built from `3e60774`; source/importer, packaging and installer checks are separate from headset acceptance. ROM-free host tests are listed in [PR0 readiness](docs/PR0_READINESS.md). |
-| Install, startup, storage and stereo | Earlier candidate install, Steam launch, persistent ROM import, eye captures, audio, grip cover/reload and Menu pause/resume have evidence. These do not cover the entire focused wear checklist. |
-| Controls and tracking | Both hands, physical ducking, View gestures, full tracking/recenter behavior and comfort remain pending for focused acceptance. |
-| Shutdown | A bounded self-exit reproduced an Android UI thread `SIGSEGV` in surface callback handling; root cause is unresolved. Container exit status 137 does not show graceful shutdown. |
-| Stereo and performance | Rear-facing yaw 180° captures are black. A quiet-scene multiview comparison showed visual parity only. Sustained frame rate and actual GPU/compositor performance are unproven. |
-| Source rights | The pinned reconstruction submodule contains large generated C translations for multiple commercial games. Rights to publish those translations or a combined binary have not been established; its MIT notice does not resolve this. See [NOTICE.md](NOTICE.md). |
+I've played it on my Frame at **2160×2160 per eye with SteamVR set to 120 Hz**. The gun angle, opening train explosions, audio, grip cover/reload and Menu pause/resume are working. I've also tried the larger gameplay window and darker surround, and I'm happy with how they look.
 
-## Build from a fresh checkout
+## What this fork adds
 
-The Frame build needs Python 3, JDK 17, Android SDK platform 34 and build-tools 35.0.0, NDK 27.2.12479018, CMake and Ninja. It downloads the pinned SDL/OpenXR build dependencies. Provide a legally obtained, matching Time Crisis World TS2 Ver.B ROM ZIP explicitly; the APK produced by this route omits ROM files.
+- Standalone Frame support, with its own Android package, OpenXR loader and controller bindings.
+- A larger gameplay window: the default is 60% wider and taller than the original port's view, filling more of the lenses without changing the headset's field of view.
+- A full cyan frame around the original arcade view, with the scenery outside it darkened by 65%. It makes the intended shooting area easier to see while keeping the game and HUD bright.
+- Corrected depth for world effects such as the opening train's crate explosions, so they sit with the scenery instead of floating over it.
+- Either-hand gun aiming and firing, grip-operated cover and reload, and physical ducking as an option.
+- Adjustable gun angle and default weapon hand. I use **−15°** on my Frame; you can set what suits you in the options.
+- View-button recentring and standing-height calibration, plus haptics and a laser aiming aid.
+- Persistent ROM files, options and progress under `~/Documents/TimeCrisisVR`, outside Lepton's disposable app storage.
+
+The original VR port supplies the reconstructed stereo world, gun rendering and arcade gameplay. The arcade simulation keeps its original rate of about 60 Hz while the headset follows SteamVR's display rate.
+
+## Controls
+
+| Input | Action |
+| --- | --- |
+| Either trigger | Use that hand; fire, start or confirm |
+| Either grip | Hold to leave cover; release both to hide and reload |
+| Right A | Add credits |
+| Right B | Toggle laser |
+| Right Menu | Pause/options or resume |
+| Left View, short press | Back from options |
+| Left View, hold 1 second | Recentre |
+| Left View, hold 3 seconds | Recentre and calibrate upright height |
+| Right X, in options | Switch grip cover / physical ducking |
+| Right stick up/down, in options | Adjust gun angle |
+| Right stick click, in options | Change default weapon hand |
+| Left stick click, in options | Reset gun angle |
+
+A and B keep their roles whichever hand holds the gun. Launch **TimeCrisisVR from the Steam library** so SteamVR supplies the controllers and per-app display settings. Quit through the SteamVR menu.
+
+## Display settings
+
+The default eye target is **2160×2160**. Set the title's refresh rate in SteamVR's per-app settings; the Frame build follows that rate. My play sessions at 120 Hz have felt smooth, but the recorded timings include occasional slow frames.
+
+`frame-display.cfg` in the persistent game folder can change the eye target, window size and outside shading. Settings apply on the next launch:
+
+```ini
+eye_resolution=2160
+gameplay_scale=1.6
+outside_darkening=0.65
+```
+
+Use `gameplay_scale=1` for the earlier window size, or `outside_darkening=0` to remove the shading. The cyan border is a guide on the HUD plane; aiming still uses the reconstructed world and the arcade game's original hit tests.
+
+## Build
+
+Build on macOS or Linux with Python 3, JDK 17, CMake, Ninja and the Android SDK. Set `JAVA_HOME` and `ANDROID_SDK_ROOT` to your own tool installations. Install Android platform 34, build-tools 35.0.0 and NDK 27.2.12479018.
 
 ```sh
 git clone --recurse-submodules --branch steam-frame https://github.com/astromaddie/time-crisis-vr.git
 cd time-crisis-vr
-./Build-Steam-Frame.sh --rom /path/to/your/timecris.zip --jobs 4
+export JAVA_HOME="/path/to/jdk-17"
+export ANDROID_SDK_ROOT="/path/to/android-sdk"
+sdkmanager "platforms;android-34" "build-tools;35.0.0" "ndk;27.2.12479018"
+./Build-Steam-Frame.sh --rom "/path/to/your/timecris.zip" --jobs 4
 ```
 
-The submodule's generated source and rights status are an unresolved source-publication blocker. This repo's MIT license covers only the port code credited there; it does not grant rights to the arcade program, reconstruction, ROM, artwork, audio or generated commercial-game translations. Do not treat this README or the build command as a release authorization.
+The build checks the ROM chips, generates the needed game code, fetches pinned SDL/OpenXR dependencies and produces `artifacts/TimeCrisisVR-SteamFrame-arm64.apk`. The APK excludes the ROM; keep the supplied archive and generated game files private.
 
-Focused headset acceptance still needs installation, real controller input, tracking, both-eye stereo, menus, gameplay, pause/resume, persistence across relaunch, clean exit, and actual performance measurement. The existing [architecture and evidence record](docs/VR_ARCHITECTURE.md) distinguishes host checks from worn/device evidence.
+For installation, the [local bundle guide](tools/steam_frame/bundle/README.txt) explains the installer and persistent folders. It expects a prepared package with its build receipt and checksums, not just this source template. The installer backs up the existing game folder, copies the APK and ROM separately, and registers the Steam title.
 
-The previous root README is preserved in [docs/README_PRE_PR0.md](docs/README_PRE_PR0.md). Exact source identity, ROM-free checks and open gates are in [docs/PR0_READINESS.md](docs/PR0_READINESS.md).
+## Current gaps
 
-Immutable tested source, final checks and open gates: [PR0 metadata](docs/PR0_METADATA.json).
+The Android surface can crash during the diagnostic self-exit path. Normal play and quitting through Steam have worked, but that shutdown bug still needs fixing. The default renderer uses separate eye passes; an optional multiview path exists for development. This fork hasn't added its own foveation controls.
+
+## Credits and licenses
+
+DR-89 and contributors provide the original VR port. The reconstruction dependency is pinned at `6aaa90b4cbc7a23733e1c9f5f9a5e772a19fe23d`. Original notices are retained in [LICENSE](LICENSE), [NOTICE.md](NOTICE.md) and the dependency.
+
+The MIT notice for port code doesn't grant rights to Time Crisis's arcade program, ROM, graphics or sound. The reconstruction includes generated translations of commercial game code, whose distribution rights still need review before a public release. See [the rights record](docs/PR0_READINESS.md). The [architecture notes](docs/VR_ARCHITECTURE.md) hold the implementation and performance history.
