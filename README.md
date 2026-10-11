@@ -20,7 +20,7 @@ I've played the solo version on my Frame at **2160×2160 per eye with SteamVR se
 
 The original VR port supplies the reconstructed stereo world, gun rendering and arcade gameplay. The arcade simulation keeps its original rate of about 60 Hz while the headset follows SteamVR's display rate.
 
-LAN co-op is a work in progress and is being moved to a separate development branch. The gameplay notes here are for solo play. See the [co-op notes](docs/LAN-COOP.md) for details.
+This is the **unfinished `steam-frame-multiplayer` development branch**. Use [`steam-frame`](https://github.com/astromaddie/time-crisis-vr/tree/steam-frame) for the solo port. The current multiplayer prototype failed paired gameplay testing and does not provide the required independent P1/P2 health, ammo, damage and cover. Its shared-resource design is obsolete. See the [co-op requirements and failure record](docs/LAN-COOP.md). The solo gameplay observations above apply to the previously tested solo build, not multiplayer acceptance.
 
 ## Controls
 

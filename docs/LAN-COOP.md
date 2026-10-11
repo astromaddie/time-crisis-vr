@@ -1,6 +1,22 @@
 # Local LAN co-op
 
-**Work in progress.** Multiplayer is being moved to a separate development branch. These notes describe the intended behavior and development checks, not a finished multiplayer release.
+**Unfinished development branch: `steam-frame-multiplayer`. Do not treat this as a playable multiplayer release.** `steam-frame` contains the solo port.
+
+## Required multiplayer behavior
+
+P1 and P2 must have **independent health, ammunition, damage, cover and reload** while shooting the same enemies in one synchronized world. Each player's trigger uses that player's aim and ammunition; hiding or reloading must not hide or reload the other player. An enemy attack must have a deterministic target fixed before impact, and only that target's exposure, invulnerability and health determine its damage. A player dying must not end the surviving player's run. The shared rail progression and original P1 cutscene actor may remain.
+
+The existing single-cabinet arbitration does not implement these rules. Its shared health/ammo/cover design is obsolete. Separate HUD counters would not satisfy the requirement: actual game shot acceptance, hit processing, damage and death must use the appropriate player's state.
+
+## Observed failure and proof required
+
+In the paired wearer test, the Frame hosted P1 and Quest 3 joined P2. Cutscenes synchronized, but P2 ducking/hiding changed P1's view; P2 shooting did not work and no damage was received. The absence of a P2 cutscene actor was accepted. Launch/focus fixes and network tests do not establish multiplayer gameplay.
+
+Private tests through the real translated game show that an exposed player loses health while the same run in cover retains it. Original shot, reload, damage and cover routines exist, but safe per-player ownership and presentation are not yet proven. Before implementing a full combat adapter, a real encounter must demonstrate P2 damaging/killing a shared enemy, independent ammunition/reload, P1 exposed taking damage with P2 protected, the reverse case, and continued play while one player is dead. Independent enemy targeting, cover camera/HUD state and script transitions also need verification.
+
+The bounded original-game encounter check did not establish a safe two-player adapter. Exposed health fell from three to zero; the resulting death reaction changed the global game mode and ended the shared stage script. The covered comparison retained three health and zero damage. Both runs completed 4,500 frames without traps. Cover also affects enemy update scheduling and the shared camera used for aiming. Stable identity was observed for one projectile class, but other attacks and independent player death/presentation remain unmapped. Multiplayer remains unfinished; no independent-player build is being delivered.
+
+Keep this feature out of `steam-frame` until those checks and paired-headset play pass. If the game cannot support these rules reliably, remove the multiplayer feature. The following sections document the historical prototype, not the approved behavior.
 
 The co-op implementation aims to let Steam Frame and Quest 3 share one fresh Time Crisis run over the same local Wi-Fi network. The headset that hosts controls P1; the joining headset controls P2. The game and simulation run on both headsets. The Frame coordinates one ordered arcade input stream so both simulations consume the same input at each `rr_frame`; the joiner waits at a tick boundary when the next canonical input has not arrived. No PC, cloud account, or remote avatar is involved.
 
@@ -16,7 +32,7 @@ The native bridge exposes nonblocking `statusJson()` states (`idle`, `host_waiti
 
 The host starts both game engines together at frame zero. The host's current EEPROM image is sent in memory at the start barrier, and the joiner's copy is read-only for that run. Co-op starts only after both engines have attached and reached the same barrier. Late joins, mid-run recovery, diagnostic replay, synthetic-input overrides, and recording playback are not supported; after a disconnect or stalled exchange, return to the launcher and start a new session.
 
-## Shared play rules
+## Historical shared-play rules (obsolete)
 
 Both headsets share the single arcade player's health and ammunition. Cover is shared: if either player is exposed, the arcade player is exposed for that tick. A shot is accepted only when its originating player was exposed on that trigger edge, and it uses that player's captured aim and off-screen state. When both players are covered, a trigger-only pulse still reaches the arcade so either player can start or confirm menus; while either player is exposed, covered players' trigger edges cannot fire. Simultaneous shots are ordered fairly. Both players' coin inputs contribute to the shared machine. Releasing both players' grips hides in cover and reloads; either player may hold a grip to leave cover. The game screen and cabinet state are shared without rendering a remote player avatar.
 
