@@ -9,8 +9,9 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/'tools'))
+from host_paths import android_sdk_root, java_tool
 import patch_sdl_frame
-SDK = Path('/Users/mads/Library/Android/sdk')
+SDK = android_sdk_root()
 BUILD_TOOLS = SDK / 'build-tools/35.0.0'
 
 parser = argparse.ArgumentParser()
@@ -81,7 +82,7 @@ for forbidden in ('com.oculus', 'quest2', 'quest3', 'android.hardware.vr.headtra
 assert 'android.hardware.touchscreen' in manifest
 assert 'hardware.vr.headtracking' not in manifest
 
-signer = ['/opt/homebrew/opt/openjdk@17/bin/java', '-jar', BUILD_TOOLS/'lib/apksigner.jar']
+signer = [java_tool('java'), '-jar', BUILD_TOOLS/'lib/apksigner.jar']
 subprocess.run(signer + ['verify', '--verbose', apk], check=True, stdout=subprocess.DEVNULL)
 # With minSdk 29 the default verifier selects v3; its v2=false means unused,
 # not absent. Verify the v2 signature over the API24-27 range explicitly.

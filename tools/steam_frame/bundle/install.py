@@ -67,19 +67,22 @@ def main():
     parser.add_argument('--verify-only', action='store_true')
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--host', default=os.environ.get('FRAME_HOST', 'steamos@frame.local'))
-    parser.add_argument('--rom', type=Path, default=Path.home() / 'Downloads' / 'timecris.zip')
-    parser.add_argument('--host-key-alias', default=os.environ.get('FRAME_HOST_KEY_ALIAS', '10.86.200.233'))
-    parser.add_argument('--lock-script', type=Path, default=Path.home() / '.codex/skills/steam-frame-vr-port/scripts/frame-lock.sh')
+    parser.add_argument('--rom', type=Path, help='user-supplied matching Time Crisis World TS2 Ver.B ROM ZIP')
+    parser.add_argument('--host-key-alias', default=os.environ.get('FRAME_HOST_KEY_ALIAS', ''))
+    parser.add_argument('--lock-script', type=Path, default=os.environ.get('FRAME_LOCK_SCRIPT'))
     args = parser.parse_args()
     verify()
     if args.verify_only: return
     if not re.fullmatch(r'[A-Za-z0-9_.@:-]+', args.host) or args.host.startswith('-'): fail('invalid SSH host')
+    if args.rom is None: fail('supply your matching Time Crisis ROM ZIP with --rom')
     if not args.rom.is_file(): fail('ROM not found: ' + str(args.rom))
     verify_rom(args.rom)
     if args.host_key_alias and (not re.fullmatch(r'[A-Za-z0-9_.:-]+', args.host_key_alias) or args.host_key_alias.startswith('-')): fail('invalid host key alias')
     if args.dry_run:
         print('Would book Frame, back up existing TimeCrisisVR data/title, copy the APK and your ROM, and register the Steam title on ' + args.host + '.')
         return
+    if args.lock_script is None: fail('set FRAME_LOCK_SCRIPT to your installed Steam Frame skill booking script')
+    args.lock_script = Path(args.lock_script).expanduser()
     if not args.lock_script.is_file(): fail('shared Frame booking script missing: ' + str(args.lock_script))
     ssh = ['ssh', '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes', '-o', 'ConnectTimeout=10']
     if args.host_key_alias: ssh += ['-o', 'HostKeyAlias=' + args.host_key_alias]

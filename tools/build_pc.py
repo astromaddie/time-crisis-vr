@@ -8,7 +8,7 @@ ROOT=Path(__file__).resolve().parents[1]
 
 def main():
     parser=argparse.ArgumentParser()
-    parser.add_argument('--rom',type=Path,default=Path.home()/'Downloads/timecris.zip')
+    parser.add_argument('--rom',type=Path,required=True,help='user-supplied matching Time Crisis ROM ZIP')
     parser.add_argument('--jobs',type=int,default=2)
     parser.add_argument('--skip-prepare',action='store_true')
     parser.add_argument('--output',type=Path,default=ROOT/'artifacts/pc/TimeCrisisVR-PC',help='Portable folder (also determines the ZIP destination)')

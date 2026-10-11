@@ -213,7 +213,7 @@ def package(assets):
     print(json.dumps(report,indent=2))
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('--rom',type=Path,default=Path.home()/'Downloads/timecris.zip');p.add_argument('--jobs',type=int,default=2);p.add_argument('--package-only',action='store_true');p.add_argument('--skip-prepare',action='store_true');p.add_argument('--bundle-roms',action='store_true',help='Include the supplied ROM files in the APK');args=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--rom',type=Path,required=True,help='user-supplied matching Time Crisis ROM ZIP');p.add_argument('--jobs',type=int,default=2);p.add_argument('--package-only',action='store_true');p.add_argument('--skip-prepare',action='store_true');p.add_argument('--bundle-roms',action='store_true',help='Include the supplied ROM files in the APK');args=p.parse_args()
     if not args.rom.is_file():p.error('ROM not found: '+str(args.rom))
     BUILD.mkdir(parents=True,exist_ok=True)
     if not args.package_only:

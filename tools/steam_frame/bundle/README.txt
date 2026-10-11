@@ -9,15 +9,19 @@ INSTALL
 2. Close running VR games. The installer uses the shared Frame booking.
 3. From this directory run:
    ./install.sh --verify-only
-   ./install.sh --rom "$HOME/Downloads/timecris.zip"
-   For a different address: add --host steamos@<address>.
+   ./install.sh --rom "/path/to/your/timecris.zip"
+   Set FRAME_HOST to your Frame SSH target. If needed, set
+   FRAME_HOST_KEY_ALIAS to an alias already present in your trusted known_hosts.
 4. Launch Devkit Game: TimeCrisisVR from the Steam library.
 
 The installer checks the bundle hashes and all 31 required ROM chip hashes,
 backs up any existing TimeCrisisVR data and title with a verified manifest,
 then copies the APK and your archive separately and registers the Steam title.
-The default SSH host is frame.local, checked against this Frame's existing trusted
-USB host key. Override --host-key-alias when using another trusted hostname.
+The SSH host defaults to steamos@frame.local; it must resolve to the user's own
+Frame and already be trusted by SSH. No machine-specific host-key alias is
+embedded. If a trusted alias is needed, pass --host-key-alias or set
+FRAME_HOST_KEY_ALIAS. Before installation, set FRAME_LOCK_SCRIPT to the shared
+booking script from the Steam Frame port skill.
 
 Persistent game files/settings/logs: /home/steamos/Documents/TimeCrisisVR
 Android path: /sdcard/Documents/TimeCrisisVR

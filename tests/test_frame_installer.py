@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Exercise bundle verification and the production remote backup command locally."""
 from pathlib import Path
-import ast, hashlib, importlib.util, json, os, subprocess, tempfile, zipfile
+import ast, hashlib, importlib.util, json, os, subprocess, sys, tempfile, zipfile
 
 script = Path(__file__).resolve().parents[1] / 'tools/steam_frame/bundle/install.py'
 if not script.exists(): script = Path(__file__).resolve().parent / 'delivery/install.py'
@@ -63,4 +63,19 @@ with tempfile.TemporaryDirectory(prefix='tcvr-installer-test-') as folder:
     result=subprocess.run(['sh','-c',command.replace(str(home),str(symlink))],capture_output=True,text=True)
     assert result.returncode!=0 and 'symlink' in result.stderr
     assert not (symlink/'Documents/TimeCrisisVR-backups/test').exists()
-print('PASS: hashes, unexpected/traversal files, chip aliases/missing chip, backup bytes/modes/symlinks/absent roots, symlink-root rejection, actual Steam response contract.')
+
+    # Exercise the real CLI's safe verification-only path and its explicit ROM requirement.
+    (bundle/'SHA256SUMS').write_text(hashlib.sha256(original).hexdigest()+'  payload/TimeCrisisVR.apk\n')
+    with zipfile.ZipFile(archive,'w') as rom:
+        for i,c in enumerate(chips): rom.writestr('older-name-'+str(i),c)
+    old_argv=sys.argv
+    try:
+        sys.argv=[str(script),'--verify-only']
+        m.main()  # Does not require a ROM, Frame host, booking script or device access.
+        sys.argv=[str(script)]
+        rejects(m.main,'supply your matching Time Crisis ROM ZIP with --rom')
+        sys.argv=[str(script),'--dry-run','--rom',str(archive)]
+        m.main()  # Checks all 31 synthetic chips and stops before SSH/booking.
+    finally:
+        sys.argv=old_argv
+print('PASS: hashes, archive contents, chip aliases/missing chip, verified backup bytes/modes/symlinks/absent roots, symlink-root rejection, Steam response contract and ROM-free verify-only path.')

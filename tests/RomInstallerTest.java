@@ -50,7 +50,7 @@ public final class RomInstallerTest {
                 File game=temp.resolve("actual-game/Documents/TimeCrisisVR").toFile();FrameStorage.ensureWritable(game);
                 Files.copy(new File(args[0]).toPath(),FrameStorage.archive(game).toPath());
                 File gameRoms=FrameStorage.prepareRoms(game,real);
-                check(real.size()==31&&RomInstaller.ready(gameRoms,real),"All real game ROMs verified under persistent Frame storage");
+                check(real.size()==31&&RomInstaller.ready(gameRoms,real),"All synthetic manifest chips verified under persistent Frame storage");
             }
             System.out.println("PASS: first-run, renamed chips, corruption, repair, invalid ZIP contents, traversal, manifest validation and persistent Frame ROM import.");
         }finally{

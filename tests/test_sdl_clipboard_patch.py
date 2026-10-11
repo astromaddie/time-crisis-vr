@@ -1,31 +1,29 @@
 """Exercise Frame-only SDL patching against the pinned source and a host Android clipboard stub."""
 from pathlib import Path
 import hashlib
-import os
 import subprocess
 import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/'tools'))
+from host_paths import android_sdk_root, java_tool
 import patch_sdl_frame
 import build as build_tools
 
 SDL_ROOT = ROOT/'.tools/sdl/SDL2-2.30.11'
 SDL_SOURCE = SDL_ROOT/'android-project/app/src/main/java'
 HANDLER_SOURCE = SDL_SOURCE/patch_sdl_frame.HANDLER_PATH
-JAVA_HOME = Path(os.environ.get('JAVA_HOME', '/opt/homebrew/opt/openjdk@17'))
-JAVAC = JAVA_HOME/'bin/javac'
-JAVA = JAVA_HOME/'bin/java'
-ANDROID_JAR = Path(os.environ.get('ANDROID_SDK_ROOT', '/Users/mads/Library/Android/sdk'))/'platforms/android-34/android.jar'
+JAVAC = java_tool('javac')
+JAVA = java_tool('java')
+SDK = android_sdk_root()
+ANDROID_JAR = SDK/'platforms/android-34/android.jar'
 
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 if not HANDLER_SOURCE.is_file():
     raise SystemExit(f'Pinned SDL source not found: {HANDLER_SOURCE}')
-if not JAVAC.is_file() or not JAVA.is_file():
-    raise SystemExit(f'JDK 17 tools not found under {JAVA_HOME}')
 if not ANDROID_JAR.is_file():
     raise SystemExit(f'Android API 34 jar not found: {ANDROID_JAR}')
 source_hash = digest(HANDLER_SOURCE)

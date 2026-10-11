@@ -1,14 +1,20 @@
 """Run production input routing tests on macOS without a headset or Windows toolchain."""
 from pathlib import Path
+import shutil
 import subprocess
+import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-SDK = Path('/Users/mads/Library/Android/sdk')
-NDK = SDK/'ndk/27.2.12479018/toolchains/llvm/prebuilt/darwin-x86_64'
-COMPILER = Path('/usr/bin/clang')
+sys.path.insert(0, str(ROOT/'tools'))
+from host_paths import android_sdk_root
+
+SDK = android_sdk_root()
+HOST_TAG = 'darwin-x86_64' if sys.platform == 'darwin' else 'linux-x86_64'
+NDK = SDK/'ndk/27.2.12479018/toolchains/llvm/prebuilt'/HOST_TAG
+COMPILER = Path(shutil.which('clang') or '')
 if not COMPILER.is_file():
-    raise SystemExit(f'Android NDK compiler not found: {COMPILER}')
+    raise SystemExit('clang is required on PATH for this host syntax test')
 
 includes = [
     'quest', 'quest/include', 'upstream/engine', 'upstream/engine/c25',
