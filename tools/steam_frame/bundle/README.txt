@@ -40,7 +40,9 @@ gun angle, right stick click changes default hand, left stick click resets angle
 15-MINUTE WEAR CHECK
 1. Launch through Steam. Check upright stereo, colours, HUD and audio.
 2. Press A for credits, then a trigger to start Stage 1.
-3. Shoot targets at the centre and both screen edges; check aim versus impacts.
+3. Shoot targets at the centre and both frame edges; check aim versus impacts.
+   Check the larger window, bright gameplay, dim exterior and readable HUD.
+   Turn the head gently left and right and check the border in both eyes.
 4. Select/fire with each trigger. Check weapon hand and recoil vibration.
 5. Use each grip and both together. Release both to hide/reload.
 6. Open options with Menu; adjust gun angle, reset it, and change default hand.
@@ -73,7 +75,14 @@ out-of-range values are clamped. The full cyan frame remains at the live 640x480
 HUD boundary, enlarged with the world at fixed depth. Eye FOV/IPD are unchanged.
 This changes physical proportions and relative parallax; it is not uniform world
 scaling. The border is a 2.5m-plane cue, while shooting uses actual world surfaces.
-The larger window/surround are source-complete; device and worn checks are pending.
+The larger window/surround are built and installed from source a2858ab. Both eyes
+were inspected at 2160-square resolution in straight-ahead and 25-degree synthetic
+head-turn replays. The frame spans about 75.8% of eye width; gameplay stays bright
+and the exterior is dimmed. The wearer accepted this window/surround in a brief
+normal Steam check: "Looks good; finished and quit." No issue was reported in
+that check; the full Stage 1/control/comfort checklist remains incomplete.
+This build also logged two actual 2160x2160 eyes and repeated 8.33ms / 120Hz
+runtime cadence during the normal wear run. Cadence is not sustained 120 FPS proof.
 The Frame build follows the runtime cadence; refresh is controlled by SteamVR.
 Startup, ROM persistence and eye-colour probe are verified unattended. The wearer
 reached the opening train with the Valve Frame profile at 2160×2160 per eye and 120 Hz,
@@ -93,7 +102,7 @@ not a performance or comfort comparison. Separate eyes remain the default.
 Matched active-flame images, both weapon hands, physical ducking,
 View gestures and full comfort assessment remain pending.
 
-Sustained 120 FPS is not established. The latest 3e60774 wear run produced 68 focused
+Sustained 120 FPS is not established. The earlier instrumented 3e60774 wear run produced 68 focused
 240-frame reports at 120 Hz/2160-square eyes, with no image or pose capture. Window
 means were 4.88–7.25 ms; the largest sample was 88.16 ms, and 3,520 of 16,320 frames
 exceeded the render-wall budget. These counters are not compositor dropped frames.
